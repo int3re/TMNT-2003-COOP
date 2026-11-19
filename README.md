@@ -11,6 +11,7 @@
 ![платформа](https://img.shields.io/badge/Windows-x86-0078d6?logo=windows)
 ![игроки](https://img.shields.io/badge/%D0%B8%D0%B3%D1%80%D0%BE%D0%BA%D0%BE%D0%B2-1%E2%80%934-orange)
 ![сеть](https://img.shields.io/badge/%D1%81%D0%B5%D1%82%D1%8C-Steam_P2P_%C2%B7_LAN-1b2838?logo=steam)
+![лицензия](https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-lightgrey)
 
 **Русский** · [English](README.en.md)
 
@@ -215,6 +216,12 @@ cmake --build build --config Release
 | [Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader) | загрузка мода в игру | MIT |
 | [Steamworks SDK](https://partner.steamgames.com/) | сеть Steam (в репозиторий не входит) | лицензия Valve |
 | [coop-anything](https://github.com/cranebeaker/coop-anything) | приёмы тестирования сетевых модов | — |
+
+## Лицензия
+
+Код мода распространяется по лицензии [MIT](LICENSE). Сторонние библиотеки подключены как
+подмодули и остаются под своими лицензиями (см. таблицу выше). Игра, её файлы и графика
+лицензией мода не покрываются.
 
 ## Правовая информация
 

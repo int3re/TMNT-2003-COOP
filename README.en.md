@@ -11,6 +11,7 @@ Everyone runs their own copy of the game on their own PC. Connection goes throug
 ![platform](https://img.shields.io/badge/Windows-x86-0078d6?logo=windows)
 ![players](https://img.shields.io/badge/players-1%E2%80%934-orange)
 ![network](https://img.shields.io/badge/network-Steam_P2P_%C2%B7_LAN-1b2838?logo=steam)
+![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
 [Русский](README.md) · **English**
 
@@ -200,6 +201,12 @@ produced.
 [Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader) (MIT) ·
 [Steamworks SDK](https://partner.steamgames.com/) (Valve's licence, not included) ·
 [coop-anything](https://github.com/cranebeaker/coop-anything) (testing techniques)
+
+## License
+
+The mod's code is released under the [MIT license](LICENSE). Third-party libraries are git
+submodules and keep their own licenses (listed above). The game, its files and its artwork are
+not covered by the mod's license.
 
 ## Legal
 
