@@ -1,0 +1,8 @@
+#include "@CMAKE_SOURCE_DIR@/src/setup/payload_ids.h"
+
+RES_UAL RCDATA "@PAYLOAD_DIR@/winmm.dll"
+RES_ASI RCDATA "@PAYLOAD_DIR@/tmntnet.asi"
+RES_INI RCDATA "@PAYLOAD_DIR@/tmntnet.ini"
+RES_CLIENT RCDATA "@PAYLOAD_DIR@/tmntnet-client.exe"
+RES_README RCDATA "@PAYLOAD_DIR@/README.md"
+@PAYLOAD_STEAM_RC@

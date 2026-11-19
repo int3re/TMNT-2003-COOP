@@ -1,0 +1,18 @@
+[submodule "third_party/minhook"]
+	path = third_party/minhook
+	url = https://github.com/TsudaKageyu/minhook
+[submodule "third_party/enet"]
+	path = third_party/enet
+	url = https://github.com/lsalzman/enet
+[submodule "third_party/SDL"]
+	path = third_party/SDL
+	url = https://github.com/libsdl-org/SDL
+	shallow = true
+[submodule "third_party/ultimate-asi-loader"]
+	path = third_party/ultimate-asi-loader
+	url = https://github.com/ThirteenAG/Ultimate-ASI-Loader
+	shallow = true
+[submodule "third_party/imgui"]
+	path = third_party/imgui
+	url = https://github.com/ocornut/imgui
+	shallow = true

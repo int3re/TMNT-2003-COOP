@@ -1,0 +1,29 @@
+# build output
+/build*/
+/out/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.asi
+*.dll
+*.exe
+*.log
+
+# game files must never be committed or shipped
+*.DAT
+*.dat
+*.afs
+*.iso
+TMNT.EXE
+tmnt.exe
+savesetting.dat
+
+# IDE
+.vs/
+.vscode/
+*.user
+
+# lab runs and their logs: they hold players' Steam names and IDs and the PC's name
+/runs/

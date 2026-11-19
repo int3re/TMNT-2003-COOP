@@ -1,0 +1,7 @@
+LIBRARY dinput8
+EXPORTS
+  DirectInput8Create = Shim_DirectInput8Create
+  DllCanUnloadNow = Shim_DllCanUnloadNow PRIVATE
+  DllGetClassObject = Shim_DllGetClassObject PRIVATE
+  DllRegisterServer = Shim_DllRegisterServer PRIVATE
+  DllUnregisterServer = Shim_DllUnregisterServer PRIVATE
