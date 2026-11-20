@@ -7,7 +7,8 @@
 # the game's settings (tmntnet.ini, savesetting.dat): changes, defaults, a running game, a game
 # that has not saved its settings yet, the copies Windows keeps of a protected folder's files; the
 # keys' page: a key for an action, the swap with the action that had it, a mouse button, a key the
-# game does not take, the ready layouts and the player's own.
+# game does not take, the ready layouts and the player's own; every value of every row written and
+# read back.
 #
 # No window is shown, the game is never started (its TMNT.EXE here is a copy of the launcher), the
 # user's own launcher settings, cache and game are not touched: everything lives under -Work, and
@@ -265,8 +266,8 @@ try {
   $ini0 = Join-Path $Work "tmntnet.ini.first"; $save0 = Join-Path $Work "savesetting.dat.first"
   New-Save $save
   Copy-Item $ini $ini0; Copy-Item $save $save0
-  $log = Run-Launcher "15-pages" @("settings@1500", "tab_graphics@1800", "display.next@2100", "wide.switch@2400", "quality.next@2700",
-                                   "fps.next@3000", "sides.next@3300", "fov.prev@3600", "vsync.next@3900", "tab_sound@4300",
+  $log = Run-Launcher "15-pages" @("settings@1500", "tab_graphics@1800", "display.next@2100", "sides.next@2400", "wide.switch@2700",
+                                   "quality.next@3000", "fps.next@3300", "fov.prev@3600", "vsync.next@3900", "tab_sound@4300",
                                    "music.b1@4600", "effects.prev@4900", "voices.next@5200", "stereo.b1@5500", "intro.b1@5800",
                                    "movies.next@6100") 8000
   Check "both files are found" ($log -match "page 1: tmntnet\.ini .*game\\tmntnet\.ini, savesetting\.dat .*game\\savesetting\.dat")
@@ -375,6 +376,23 @@ try {
   Copy-Item $ini0 $ini -Force
   $log = Run-Launcher "23e-no-own" @("settings@1500", "tab_controls@1800", "layout.next@2200", "layout.next@2600") 4000
   Check "with no keys of one's own the row has two values" ($log -match "(?s)layout: two players.*layout: the game's" -and $log -notmatch "layout: own" -and (Read-Keys $save 0) -eq $game1)
+
+  "24. rows that do nothing as the other rows are: no wide screen, the exclusive full screen"
+  $log = Run-Launcher "24-applies" @("settings@1500", "tab_graphics@1800", "wide.switch@2100", "resolution.next@2400", "sides.next@2700",
+                                     "wide.switch@3000", "display.prev@3300", "background.switch@3600", "display.next@3900", "background.switch@4200",
+                                     "background.switch@4500") 5500
+  Check "without the wide screen the resolution and the sides take no press" (([regex]::Matches($log, "(resolution|sides)\.next . NOT on the screen")).Count -eq 2)
+  Check "in the full screen 'the game goes on in the background' takes none; without a frame it does" (([regex]::Matches($log, "background\.switch . NOT on the screen")).Count -eq 1 -and ([regex]::Matches($log, "\] set background = ")).Count -eq 2)
+  Check "tmntnet.ini ends as it began" ((Get-FileHash $ini).Hash -eq (Get-FileHash $ini0).Hash)
+
+  "25. every value of every row, written and read back; every key given and taken back (/check)"
+  $h1 = (Get-FileHash $ini).Hash; $h2 = (Get-FileHash $save).Hash
+  $log = Join-Path $Work "25-check.log"
+  $proc = Start-Process $mine -ArgumentList @("/check", "`"$game`"", "/log", "`"$log`"") -PassThru -Wait
+  $text = if (Test-Path $log) { Get-Content $log -Raw -Encoding UTF8 } else { "" }
+  Check "the launcher finds nothing wrong: $([regex]::Match($text, 'check: done, [^\r\n]*').Value)" ($proc.ExitCode -eq 0 -and $text -match "check: done, \d+ right, 0 wrong" -and $text -notmatch "FAIL")
+  Check "all sixteen rows, the keys and the layouts were gone through" (([regex]::Matches($text, "check: \w+, \d+ values: ")).Count -eq 16 -and $text -match "check: keys, 24 actions and a swap" -and $text -match "check: layouts")
+  Check "both files are left as they were, to the byte" ((Get-FileHash $ini).Hash -eq $h1 -and (Get-FileHash $save).Hash -eq $h2)
 }
 finally {
   Stop-Server

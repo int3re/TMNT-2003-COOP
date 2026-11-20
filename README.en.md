@@ -239,7 +239,7 @@ is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [re/notes.md](re/notes.md
 
 ## Status
 
-Under active development, version **0.15.0**. The story has been played by two, three and four
+Under active development, version **0.15.1**. The story has been played by two, three and four
 players over Steam in real sessions; what broke in each was fixed afterwards (see the changelog).
 
 Known limits:

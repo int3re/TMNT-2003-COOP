@@ -32,6 +32,11 @@ Kind kind(Row r);
 const wchar_t* label(Row r);
 const char* key(Row r);            // its name for the lab: display, music, ...
 bool usable(Row r);                // its file is there
+// The row does something with the other rows as they are. Without the wide
+// screen the mod leaves the picture to the game (4:3, the resolution of the
+// game's own menu): РАЗРЕШЕНИЕ and ПО БОКАМ do nothing; in the exclusive full
+// screen the game cannot go on in the background.
+bool applies(Row r);
 int count(Row r);                  // how many values it has now
 int value(Row r);                  // the one set
 std::wstring name(Row r, int v);   // a value's words

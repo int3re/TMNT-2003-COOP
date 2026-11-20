@@ -74,7 +74,7 @@ const Info kInfo[kRows] = {
     {L"Панели игроков", "hud", Kind::Choice, true},
     {L"Качество", "quality", Kind::Choice, true},
     {L"Лимит кадров", "fps", Kind::Choice, true},
-    {L"Синхронизация", "vsync", Kind::Choice, true},
+    {L"Верт. синхронизация", "vsync", Kind::Choice, true},
     {L"Музыка", "music", Kind::Level, false},
     {L"Звуки", "effects", Kind::Level, false},
     {L"Голоса", "voices", Kind::Level, false},
@@ -376,6 +376,12 @@ Kind kind(Row r) { return kInfo[r].kind; }
 const wchar_t* label(Row r) { return kInfo[r].label; }
 const char* key(Row r) { return kInfo[r].key; }
 bool usable(Row r) { return kInfo[r].in_ini ? g.mod : g.levels; }
+
+bool applies(Row r) {
+  if (r == kResolution || r == kSides) return g.cfg.widescreen;  // (src/mod/widescreen.cpp, install)
+  if (r == kBackground) return g.cfg.display != "fullscreen";    // (src/mod/display.cpp, install)
+  return true;
+}
 
 int count(Row r) {
   switch (r) {

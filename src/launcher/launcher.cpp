@@ -30,6 +30,8 @@
 //   /log <file>                 what happened, line by line
 //   /fonts                      the fonts found, into the log
 //   /feed <file> <tag>          reads a saved releases.atom, the release into the log
+//   /check <game folder>        every value of every row of the game's settings is written and read
+//                               back, every key is given and taken back; the result into the log
 #include <windows.h>
 
 #include <commctrl.h>
@@ -306,7 +308,7 @@ void fill_page(view::View& v, bool game) {
     view::Row row;
     row.number = r;
     row.label = gset::label(r);
-    row.usable = game && !m.game_busy && gset::usable(r);
+    row.usable = game && !m.game_busy && gset::usable(r) && gset::applies(r);
     const int now = gset::value(r);
     switch (gset::kind(r)) {
       case gset::Kind::Choice:
@@ -358,6 +360,12 @@ void fill_page(view::View& v, bool game) {
     v.page_note = sound ? L"Громкость — та же, что в игре: ПАРАМЕТРЫ → ОПЦИИ ЗВУКА. Действует со следующего запуска игры."
                         : L"Настройки мода из tmntnet.ini — те же строки, что в игре: ПАРАМЕТРЫ → ПАРАМЕТРЫ ГРАФИКИ. "
                           L"Действуют со следующего запуска игры.";
+    // Rows that do nothing with the other rows as they are: why they are pale.
+    if (!sound && !gset::applies(gset::kResolution))
+      v.page_note = L"Широкий формат выключен: картинка 4:3, как в оригинале. Разрешение тогда выбирается в меню игры, "
+                    L"а «По бокам от 4:3» не нужно.";
+    else if (!sound && !gset::applies(gset::kBackground))
+      v.page_note = L"В полном экране игра не может идти в фоне: эта строка действует в режимах «Без рамки» и «В окне».";
   }
 }
 
@@ -960,7 +968,7 @@ void open_tab(int tab) {
 void change_row(int number, int part) {
   if (number < 0 || number >= gset::kRows || !m.settings_open || (m.tab != 1 && m.tab != 2) || m.game_busy) return;
   const gset::Row r = (gset::Row)number;
-  if ((r >= gset::kFirstSound) != (m.tab == 2) || !gset::usable(r)) return;
+  if ((r >= gset::kFirstSound) != (m.tab == 2) || !gset::usable(r) || !gset::applies(r)) return;
   const int now = gset::value(r);
   int next = now;
   switch (gset::kind(r)) {
@@ -1685,6 +1693,82 @@ void CALLBACK lab_tick(HWND, UINT, UINT_PTR, DWORD) {
   }
 }
 
+// Lab: the pages of the game's settings against a game folder, with no window.
+// Every value of every row is written and read back (tmntnet.ini through the
+// mod's own reader), every action of both players takes a key and gets its own
+// back, two actions swap their keys, the ready layouts come and go. Each row
+// ends on the value it began with: the folder's files are left as they were.
+int check_settings(const std::wstring& dir) {
+  gset::load(dir);
+  int bad = 0, good = 0;
+  auto fail = [&](const std::wstring& what) {
+    ++bad;
+    lab(L"check: FAIL " + what);
+  };
+  for (int r = 0; r < gset::kRows; ++r) {
+    const gset::Row row = (gset::Row)r;
+    const std::wstring key = update::widen(gset::key(row));
+    if (!gset::usable(row)) {
+      fail(key + L": its file is not in the folder");
+      continue;
+    }
+    const int first = gset::value(row), n = gset::count(row);
+    std::wstring names;
+    for (int i = 1; i <= n; ++i) {  // every value, the first one last
+      const int v = (first + i) % n;
+      const std::wstring name = gset::name(row, v);
+      names += (names.empty() ? L"" : L", ") + name;
+      if (!gset::set(row, v)) {
+        fail(key + L" = " + name + L": " + gset::error());
+        continue;
+      }
+      gset::load(dir);
+      if (gset::value(row) != v) fail(key + L" = " + name + L" reads back as " + gset::name(row, gset::value(row)));
+      else ++good;
+    }
+    lab(L"check: " + key + L", " + std::to_wstring(n) + L" values: " + names);
+  }
+  if (!gset::has_keys()) {
+    fail(L"keys: savesetting.dat is not in the folder");
+  } else {
+    const int spare = 0x44;  // F10
+    for (int p = 0; p < 2; ++p)
+      for (int a = 0; a < gset::kKeyActions; ++a) {
+        const std::wstring who = L"player " + std::to_wstring(p + 1) + L" " + update::widen(gset::action_key(a));
+        const int own = gset::key_code(p, a);
+        if (!gset::set_key(p, a, spare)) fail(who + L" = F10: " + gset::error());
+        gset::load(dir);
+        if (gset::key_code(p, a) != spare) fail(who + L" = F10 reads back as " + gset::key_name(gset::key_code(p, a)));
+        if (!gset::set_key(p, a, own)) fail(who + L" back: " + gset::error());
+        gset::load(dir);
+        if (gset::key_code(p, a) != own) fail(who + L" does not get " + gset::key_name(own) + L" back");
+        else ++good;
+      }
+    // A key the other player has: the two actions change keys, and back.
+    const int mine = gset::key_code(0, 4), theirs = gset::key_code(1, 4);
+    gset::set_key(0, 4, theirs);
+    gset::load(dir);
+    if (gset::key_code(0, 4) != theirs || gset::key_code(1, 4) != mine) fail(L"the swap between the players");
+    gset::set_key(0, 4, mine);
+    gset::load(dir);
+    if (gset::key_code(0, 4) != mine || gset::key_code(1, 4) != theirs) fail(L"the swap back");
+    else ++good;
+    lab(L"check: keys, " + std::to_wstring(2 * gset::kKeyActions) + L" actions and a swap");
+    if (gset::layout() == 0) {  // (with keys of one's own the layouts would leave them in tmntnet.ini)
+      gset::set_layout(1);
+      gset::load(dir);
+      if (gset::layout() != 1) fail(L"the layout of two players");
+      gset::set_layout(0);
+      gset::load(dir);
+      if (gset::layout() != 0) fail(L"the game's own layout");
+      else ++good;
+      lab(L"check: layouts");
+    }
+  }
+  lab(L"check: done, " + std::to_wstring(good) + L" right, " + std::to_wstring(bad) + L" wrong");
+  return bad;
+}
+
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -1693,7 +1777,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
   int argc = 0;
   wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-  std::wstring shot, state = L"update", was, feed, feed_tag;
+  std::wstring shot, state = L"update", was, feed, feed_tag, check_dir;
   float scale = 1.0f;
   int accent = -1;
   DWORD snap_after = 0;
@@ -1712,6 +1796,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     else if (a == L"/snap" && more) g_snap_file = argv[++i];
     else if (a == L"/after" && more) snap_after = (DWORD)_wtoi(argv[++i]);
     else if (a == L"/fonts") fonts = true;
+    else if (a == L"/check" && more) check_dir = argv[++i];
     else if (a == L"/apply") apply = true;
     else if (a == L"/updated") m.just_updated = m.self_tried = true;  // (and no second update in a row)
     else if (a == L"/at" && more) {
@@ -1741,6 +1826,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     lab(gfx::fonts_report());
     gfx::shutdown();
     return 0;
+  }
+  if (!check_dir.empty()) {
+    const int bad = check_settings(check_dir);
+    gfx::shutdown();
+    return bad ? 1 : 0;
   }
   if (!feed.empty()) {
     FILE* f = _wfopen(feed.c_str(), L"rb");
