@@ -60,7 +60,7 @@ powershell -ExecutionPolicy Bypass -File tests\run_steam_mock.ps1
 
 - `README.md`, `docs/` — для репозитория.
 - `docs/LAUNCHER.md` — лаунчер: для игрока и для разработчика (как проверять без окна, как
-  делается релиз). `dist/release.txt` — что лаунчер покажет о новой версии: пишется заново к
+  делается релиз). Его картинки (`docs/images/launcher*.png`) рисует `tools/launcher_images.py`. `dist/release.txt` — что лаунчер покажет о новой версии: пишется заново к
   каждому релизу.
 - `dist/README.md` — инструкция, которую установщик кладёт в папку игры
   (`tmntnet-README.md`). Если меняется поведение, видимое игроку, поправьте и её.

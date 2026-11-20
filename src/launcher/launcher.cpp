@@ -14,7 +14,7 @@
 //   /ini <file>                 another settings file ([launcher] base=..., no_play=1)
 //   /shot <png> /state <name>   a canned state's picture (update, install, downloading, ready,
 //                               nogame, offline, settings, error, checking, bundle, ...);
-//                               /scale <n>, /accent <0..3>
+//                               /scale <n>, /accent <0..3>, /was <the version before, in the picture>
 //   /snap <png> /after <ms>     runs hidden, saves the live state's picture after <ms>, exits
 //   /do <what>@<ms>             presses a control then (primary, secondary, cancel, settings, ...)
 //   /at <x>,<y>                 shows the window there, without taking the keyboard
@@ -1211,41 +1211,49 @@ bool make_window(bool visible, const POINT* at) {
 
 // --- lab: canned states and their pictures ------------------------------------------------
 
-void canned(const std::wstring& state) {
+std::wstring today_text() {
+  static const wchar_t* kMonths[] = {L"января", L"февраля", L"марта", L"апреля", L"мая", L"июня",
+                                     L"июля", L"августа", L"сентября", L"октября", L"ноября", L"декабря"};
+  SYSTEMTIME t;
+  GetLocalTime(&t);
+  return std::to_wstring(t.wDay) + L" " + kMonths[t.wMonth - 1] + L" " + std::to_wstring(t.wYear);
+}
+
+// The pictures are about the release this file is built for: its version and
+// notes (dist/release.txt) stand as the latest on GitHub, `was` as the mod
+// found in the game folder and as the version of the launcher shown.
+void canned(const std::wstring& state, std::wstring was) {
+  update::Release mine = carried();  // (read before the stand-ins below are set)
+  if (was.empty()) was = mine.protocol_since.empty() || mine.protocol_since == mine.version ? L"0.1.0" : mine.protocol_since;
   m.fake_game = state == L"nogame" ? 0 : 1;
   m.fake_bundle = 1;
-  m.fake_own = L"0.13.8";  // (a launcher of the version before the release shown)
+  m.fake_own = was;
   m.set.game_dir = state == L"nogame" ? L"" : L"D:\\Games\\Teenage Mutant Ninja Turtles";
   m.check = Check::Known;
   m.checked_at = L"18:42";
-  m.installed = L"0.13.8";
+  m.installed = was;
   update::Release& r = m.latest;
-  r.tag = L"v0.13.9";
-  r.version = L"0.13.9";
-  r.date = L"20 ноября 2026";
-  r.protocol = 12;
-  r.protocol_since = L"0.13.8";
-  r.setup_size = 6782464;
+  r = mine;
+  r.date = today_text();
+  if (HRSRC inside = FindResourceW(nullptr, MAKEINTRESOURCEW(RES_SETUP), RT_RCDATA)) r.setup_size = SizeofResource(nullptr, inside);
   r.setup_sha256 = std::wstring(64, L'0');
   r.launcher = L"tmntnet-launcher.exe";
-  r.launcher_size = 7489024;
+  WIN32_FILE_ATTRIBUTE_DATA self{};
+  if (GetFileAttributesExW(self_path().c_str(), GetFileExInfoStandard, &self)) r.launcher_size = self.nFileSizeLow;
   r.launcher_sha256 = std::wstring(64, L'0');
-  r.title = L"Надписи, которые с модом стали неправдой";
-  r.notes = {L"Заставки додзё: вместо «Только для Игрока 1» теперь «Для всей команды».",
-             L"Значок в углу у хоста показывает пинг каждого гостя, а не только игрока 2."};
-  g_canned_carried = r;
-  if (state == L"install") m.installed.clear();
-  else if (state == L"ready") m.installed = L"0.13.9", m.fake_own = L"0.13.9";
+  g_canned_carried = r;  // (what the launcher of the "bundle" pictures carries)
+  if (state == L"install") m.installed.clear(), m.fake_own = r.version;  // (a first start of this release's launcher)
+  else if (state == L"ready") m.installed = r.version, m.fake_own = r.version;
   else if (state == L"offline") {
     m.check = Check::Failed;
     m.check_failure.host = L"github.com";
   } else if (state == L"bundle") {  // nothing installed, GitHub silent: the launcher's own load
     m.installed.clear();
-    m.fake_own = L"0.13.9";
+    m.fake_own = r.version;
     m.check = Check::Failed;
     m.check_failure.host = L"github.com";
   } else if (state == L"bundle-update") {  // an older mod, GitHub not asked
-    m.fake_own = L"0.13.9";
+    m.fake_own = r.version;
     m.check = Check::NotAsked;
   } else if (state == L"checking") m.check = Check::Asking;
   else if (state == L"settings") m.settings_open = true;
@@ -1258,18 +1266,16 @@ void canned(const std::wstring& state) {
     m.error_host = L"release-assets.githubusercontent.com";
   } else if (state == L"downloading") {
     m.job = Job::Download;
-    g_got = 4643000;
-    g_total = 7489024;
+    g_total = r.launcher_size;
+    g_got = r.launcher_size / 100 * 62;
     m.flow = 7.0f;
   } else if (state == L"installing") {
     m.job = Job::Install;
-  } else if (state == L"protocol") {
-    r.protocol = 13;
-    r.protocol_since = L"0.14.0";
-    r.version = L"0.14.0";
-    r.tag = L"v0.14.0";
+  } else if (state == L"protocol") {  // a release whose protocol is new
+    r.protocol += 1;
+    r.protocol_since = r.version;
   } else if (state == L"self") {  // the mod is the latest, the launcher is not
-    m.installed = L"0.13.9";
+    m.installed = r.version;
   }
 }
 
@@ -1338,7 +1344,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
   SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
   int argc = 0;
   wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-  std::wstring shot, state = L"update", feed, feed_tag;
+  std::wstring shot, state = L"update", was, feed, feed_tag;
   float scale = 1.0f;
   int accent = -1;
   DWORD snap_after = 0;
@@ -1351,6 +1357,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     else if (a == L"/log" && more) g_log_file = argv[++i];
     else if (a == L"/shot" && more) shot = argv[++i];
     else if (a == L"/state" && more) state = argv[++i];
+    else if (a == L"/was" && more) was = argv[++i];
     else if (a == L"/scale" && more) scale = (float)_wtof(argv[++i]);
     else if (a == L"/accent" && more) accent = _wtoi(argv[++i]);
     else if (a == L"/snap" && more) g_snap_file = argv[++i];
@@ -1403,7 +1410,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     return found ? 0 : 1;
   }
   if (!shot.empty()) {  // a canned state's picture, no window
-    canned(state);
+    canned(state, was);
     if (accent >= 0 && accent <= 3) m.set.accent = accent;
     const bool ok = gfx::render_png(shot, view::kWidth, view::kHeight, scale, draw_once, nullptr);
     gfx::shutdown();
