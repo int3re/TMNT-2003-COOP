@@ -156,5 +156,13 @@ int players();
 // the frame being played: that player (the first, 0-based), else -1. The same
 // on every PC. Game thread (net_pause.cpp).
 int pause_asked_by();
+// A movie's end (movie_sync.cpp). set_movie_over: this PC's own movie has
+// played to the end (said to every game with this PC's buttons from the next
+// frame on, until taken back). movie_over_mask: the players (bit p) whose
+// buttons of the frame being played say so; present_mask: the players who are
+// in the session in that frame. The same on every PC. Game thread.
+void set_movie_over(bool over);
+uint32_t movie_over_mask();
+uint32_t present_mask();
 
 }  // namespace lockstep

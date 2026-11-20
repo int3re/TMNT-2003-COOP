@@ -6,8 +6,8 @@
 
 Каждый играет в своей копии игры на своём ПК. Соединение через Steam: без проброса портов и VPN.
 
-![версия](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-0.13.7-2ea44f)
-![протокол](https://img.shields.io/badge/%D1%81%D0%B5%D1%82%D0%B5%D0%B2%D0%BE%D0%B9_%D0%BF%D1%80%D0%BE%D1%82%D0%BE%D0%BA%D0%BE%D0%BB-11-blue)
+![версия](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-0.13.8-2ea44f)
+![протокол](https://img.shields.io/badge/%D1%81%D0%B5%D1%82%D0%B5%D0%B2%D0%BE%D0%B9_%D0%BF%D1%80%D0%BE%D1%82%D0%BE%D0%BA%D0%BE%D0%BB-12-blue)
 ![платформа](https://img.shields.io/badge/Windows-x86-0078d6?logo=windows)
 ![игроки](https://img.shields.io/badge/%D0%B8%D0%B3%D1%80%D0%BE%D0%BA%D0%BE%D0%B2-1%E2%80%934-orange)
 ![сеть](https://img.shields.io/badge/%D1%81%D0%B5%D1%82%D1%8C-Steam_P2P_%C2%B7_LAN-1b2838?logo=steam)
@@ -170,7 +170,7 @@ flowchart LR
 
 ## Состояние проекта
 
-Мод в активной разработке, версия **0.13.7**. Сюжет вдвоём, втроём и вчетвером через Steam
+Мод в активной разработке, версия **0.13.8**. Сюжет вдвоём, втроём и вчетвером через Steam
 проходился в настоящих играх с друзьями; после каждой такой игры найденные проблемы
 исправлялись (см. [историю версий](docs/CHANGELOG.md)).
 

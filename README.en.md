@@ -6,8 +6,8 @@
 
 Everyone runs their own copy of the game on their own PC. Connection goes through Steam: no port forwarding, no VPN.
 
-![version](https://img.shields.io/badge/version-0.13.7-2ea44f)
-![protocol](https://img.shields.io/badge/net_protocol-11-blue)
+![version](https://img.shields.io/badge/version-0.13.8-2ea44f)
+![protocol](https://img.shields.io/badge/net_protocol-12-blue)
 ![platform](https://img.shields.io/badge/Windows-x86-0078d6?logo=windows)
 ![players](https://img.shields.io/badge/players-1%E2%80%934-orange)
 ![network](https://img.shields.io/badge/network-Steam_P2P_%C2%B7_LAN-1b2838?logo=steam)
@@ -165,7 +165,7 @@ is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [re/notes.md](re/notes.md
 
 ## Status
 
-Under active development, version **0.13.7**. The story has been played by two, three and four
+Under active development, version **0.13.8**. The story has been played by two, three and four
 players over Steam in real sessions; what broke in each was fixed afterwards (see the changelog).
 
 Known limits:

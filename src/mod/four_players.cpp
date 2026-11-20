@@ -299,16 +299,76 @@ void __cdecl hkFirstPos(float* out) {
   out[0] = out[1] = out[2] = 0;
 }
 
-// A new game (0x404cad) clears the players' records; the characters (chosen
-// before it) stay, as the game's own do.
+// A level's start (0x404cad, from the level task's init 0x411db5) clears the
+// players' records, but for the score a turtle's end left there for the next
+// level (+0x68) and the three ints at +0x28 (the shurikens); the characters
+// (chosen before it) stay too. (Until 0.13.8 all of players 3 and 4's record
+// went: a real game, "player 3's score is 0 after every level".)
 void(__cdecl* oResetGame)() = nullptr;
 void __cdecl hkResetGame() {
   oResetGame();
   for (Extra& e : g_extra) {
+    const int32_t score = *reinterpret_cast<int32_t*>(e.rec + (0x68 - 0x40));
     std::memset(e.rec, 0, sizeof(e.rec));
-    std::memset(e.setting, 0, sizeof(e.setting));
+    *reinterpret_cast<int32_t*>(e.rec + (0x68 - 0x40)) = score;
     e.flag = 0;
   }
+}
+
+// A new run (0x404c8f: the story's start 0x4945ed and 0x494781, the dojo's
+// 0x490c09 and 0x491189): the score kept between levels is 0 again and the
+// shurikens are {10, 0, 0} (0x404c3f), for players 1 and 2.
+void(__cdecl* oNewRun)() = nullptr;
+void __cdecl hkNewRun() {
+  oNewRun();
+  for (Extra& e : g_extra) {
+    *reinterpret_cast<int32_t*>(e.rec + (0x68 - 0x40)) = 0;
+    e.setting[0] = 10, e.setting[1] = e.setting[2] = 0;
+  }
+}
+
+// The stages for one turtle (0x40498a: stages 6, 19 and 30, the dojo): the
+// level makes player 1 alone there (0x411b7b: 0x4117c9 instead of 0x4115d9).
+// In a game together everybody takes part: the level's own choice hears "not
+// such a stage" (the other places that ask keep their answer: the dojo's round
+// and its panel).
+using Solo_t = int(__cdecl*)();
+Solo_t g_solo_stage = nullptr;
+int __cdecl solo_stage_for_makers() {
+  const int solo = g_solo_stage();
+  if (solo && lockstep::state() == lockstep::State::Running && lockstep::players() > 1) {
+    LOGI("four players: a stage for one turtle: in a game together everybody takes part");
+    return 0;
+  }
+  return solo;
+}
+
+// The level's results (the story's flow, 0x494cce): player 1, then player 2
+// if it takes part and has a character, get the level's bonus: 0x4949f1
+// (player in esi) adds 0x49496c(player) (the time under the level's par, the
+// record's +0x80 and +0x64) to the record's +0x6C and to the score kept for
+// the next level, +0x68. Players 3 and 4 get theirs the same way, before
+// player 1's (the first question there, "does player 1 take part", is asked
+// through here).
+using TakesPart_t = int(__cdecl*)(int);
+TakesPart_t g_results_takes_part = nullptr;
+void* g_level_bonus = nullptr;
+int __cdecl results_takes_part(int p) {
+  if (g_on && g_level_bonus)
+    for (int x = 2; x < 4; ++x) {
+      if (x >= g_count || !ch32(x, 0xC8) || !ch32(x, 0xEC)) continue;
+      const int before = rec32(x, 0x68);
+      void* bonus = g_level_bonus;
+      __asm {
+        push esi
+        mov esi, x
+        call bonus
+        pop esi
+      }
+      LOGI("four players: player %d's score for the next level %d (%d with the level's bonus)", x + 1, before,
+           rec32(x, 0x68));
+    }
+  return g_results_takes_part(p);
 }
 
 void(__cdecl* oBothTakePart)() = nullptr;
@@ -560,6 +620,12 @@ using Make_t = void*(__cdecl*)(void* scene, int player, int character, const flo
 Character_t g_load_character = nullptr, g_free_character = nullptr;
 Make_t oMake = nullptr;
 int g_loaded[2];  // characters loaded for players 3 and 4
+// ... and how many times: the game counts a character's loads (0x427fef: inc
+// [0x60eb88], freed at 0), and a scene inside the story loads the players again
+// and frees them when it ends (the dojo: 0x491184 and 0x490ebd). Until 0.13.8
+// one free here forgot the character: after the dojo "player 3's character is
+// not loaded; not made" (a real game: player 3 was gone on the next map).
+int g_load_count[2];
 
 constexpr int kTurtles[] = {1, 2, 3, 4};  // the four turtles' character numbers
 
@@ -589,11 +655,20 @@ void __cdecl hkLoadPlayers() {
   if (!g_on) return;
   assign_characters();
   for (int p = 2; p < 4; ++p) {
-    g_loaded[p - 2] = char_of(p);
-    if (g_loaded[p - 2]) g_load_character(g_loaded[p - 2]);
+    int& loaded = g_loaded[p - 2];
+    int& count = g_load_count[p - 2];
+    const int ch = char_of(p);
+    if (loaded && loaded != ch) {  // (another turtle than the one loaded: that one goes)
+      for (; count > 0; --count) g_free_character(loaded);
+      loaded = 0;
+    }
+    if (!ch) continue;
+    g_load_character(ch);
+    loaded = ch;
+    ++count;
   }
-  LOGI("four players: players 3 and 4 are characters %d and %d (called from %p)", char_of(2), char_of(3),
-       _ReturnAddress());
+  LOGI("four players: players 3 and 4 are characters %d and %d, loaded %d and %d time(s) (called from %p)", char_of(2),
+       char_of(3), g_load_count[0], g_load_count[1], _ReturnAddress());
 }
 
 bool g_in_level[2];  // players 3 and 4 were made in this level
@@ -603,10 +678,12 @@ void __cdecl hkFreePlayers() {
   oFreePlayers();
   g_in_level[0] = g_in_level[1] = false;
   if (g_loaded[0] || g_loaded[1])
-    LOGI("four players: characters %d and %d freed (called from %p)", g_loaded[0], g_loaded[1], _ReturnAddress());
-  for (int& c : g_loaded) {
-    if (c) g_free_character(c);
-    c = 0;
+    LOGI("four players: characters %d and %d freed, %d and %d load(s) left (called from %p)", g_loaded[0], g_loaded[1],
+         std::max(0, g_load_count[0] - 1), std::max(0, g_load_count[1] - 1), _ReturnAddress());
+  for (int i = 0; i < 2; ++i) {
+    if (!g_loaded[i]) continue;
+    g_free_character(g_loaded[i]);
+    if (--g_load_count[i] <= 0) g_load_count[i] = 0, g_loaded[i] = 0;
   }
 }
 
@@ -669,8 +746,8 @@ void make_extras(void* scene) {
     fix_life(p);
     const bool t = rec32(p, 0x44) != 0;  // its turtle, in its record
     g_in_level[p - 2] = g_in_level[p - 2] || t;
-    LOGI("four players: player %d (character %d) %s at (%.2f %.2f %.2f)", p + 1, ch, t ? "made" : "NOT made", pos[0],
-         pos[1], pos[2]);
+    LOGI("four players: player %d (character %d) %s at (%.2f %.2f %.2f), its score from the level before %d", p + 1, ch,
+         t ? "made" : "NOT made", pos[0], pos[1], pos[2], rec32(p, 0x68));
   }
 }
 
@@ -985,6 +1062,8 @@ void install(const Config& cfg) {
       {"p_reset_game",
        "55 8B EC 83 EC 0C A1 ?? ?? ?? ?? D9 EE D9 5D F4 53 56 D9 EE D9 5D F8 57 D9 EE 33 DB 8D B8 44 01 00 00",
        (void*)&hkResetGame, orig_of(oResetGame)},
+      {"p_new_run", "A1 ?? ?? ?? ?? 8B 0D ?? ?? ?? ?? 89 48 24 83 60 68 00 83 A0 AC 00 00 00 00 E9", (void*)&hkNewRun,
+       orig_of(oNewRun)},
       {"p_both_take_part", "A1 ?? ?? ?? ?? 33 C9 41 89 88 EC 00 00 00 89 88 14 01 00 00 C3", (void*)&hkBothTakePart,
        orig_of(oBothTakePart)},
       {"slot_rumble", "8B 44 24 08 56 8B 74 24 08 69 F6 AC 00 00 00 81 C6 ?? ?? ?? ?? 89 86 A4 00 00 00 50",
@@ -1111,6 +1190,32 @@ void install(const Config& cfg) {
   oFreePlayers = reinterpret_cast<void(__cdecl*)()>(free_);
   ++total;
   ok += patch::redirect_calls("free_players", free_, (void*)&hkFreePlayers) > 0;
+  // The level's results (0x494cce): players 3 and 4's bonus with players 1 and 2's.
+  if (const uintptr_t results = patch::find(
+          "level_results", "33 DB 53 E8 ?? ?? ?? ?? 85 C0 59 74 07 33 F6 E8 ?? ?? ?? ?? 33 F6 46 56 E8")) {
+    const uintptr_t asked = results + 3 + 5 + patch::read<int32_t>(results + 3 + 1);
+    const uintptr_t bonus = results + 15 + 5 + patch::read<int32_t>(results + 15 + 1);
+    const int32_t rel = (int32_t)(reinterpret_cast<uintptr_t>(&results_takes_part) - (results + 3 + 5));
+    if (patch::in_image(asked, 1) && patch::in_image(bonus, 1)) {
+      g_results_takes_part = reinterpret_cast<TakesPart_t>(asked);
+      g_level_bonus = reinterpret_cast<void*>(bonus);
+      const bool in_place = patch::write(results + 3 + 1, &rel, 4);
+      LOGI("four players: players 3 and 4 get the level's bonus like players 1 and 2%s", in_place ? "" : ": not in place");
+    }
+  }
+  // The level's choice of whom it makes (0x411b7b): its question "a stage for
+  // one turtle?" (0x40498a) is asked through here.
+  if (const uintptr_t solo = patch::find("solo_stage_makers",
+                                         "E8 ?? ?? ?? ?? 85 C0 74 09 8B C6 E8 ?? ?? ?? ?? EB 07 56 E8 ?? ?? ?? ?? 59 E8")) {
+    const uintptr_t asked = solo + 5 + patch::read<int32_t>(solo + 1);
+    const int32_t rel = (int32_t)(reinterpret_cast<uintptr_t>(&solo_stage_for_makers) - (solo + 5));
+    if (patch::in_image(asked, 1)) {
+      g_solo_stage = reinterpret_cast<Solo_t>(asked);
+      const bool in_place = patch::write(solo + 1, &rel, 4);
+      LOGI("four players: in a game together everybody takes part in the stages for one turtle%s",
+           in_place ? "" : ": not in place");
+    }
+  }
   // The raw masks (0x4b2839) and the sticks' bytes (their getter 0x4b271f, next
   // to the hat's 0x4b272b): players 3 and 4's gamepads taken from players 1 and 2.
   // (Its one caller calls ours: its loops stay off its first bytes either way.)

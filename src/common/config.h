@@ -154,6 +154,8 @@ struct Config {
   uint32_t debug_session_seed = 0;  // session_seed=N: the host's sessions start rand() with N (lab: a run again)
   bool debug_level_dump = false;  // level_dump=1: the game's statics at every story level's start and end, to files (lab)
   bool debug_profile = false;  // profile=1: where the game's thread is while this PC catches up with a game, sampled (lab)
+  bool debug_movie_sync = true;  // movie_sync=0: a movie ends by each PC's own clock, as before 0.13.8 (lab: the fault)
+  int debug_movie_late = 0;      // movie_late=N: this PC hears its movie's end N frames later (lab: PCs apart)
   int debug_stall_at = 0;  // stall_at=N, stall_ms=M: the game's thread sleeps M ms at its Nth keyboard poll (lab: the watchdog)
   int debug_stall_ms = 0;
   // actions=1: the players' actions, their life and what changes in their

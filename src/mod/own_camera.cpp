@@ -80,10 +80,21 @@ constexpr float kNoHold = 1.0e30f;  // a circle no move leaves
 // shadow's ground check throws dice for a splash on water (0x4189d3: rand()),
 // which makes a new object. The same test is asked by 0x424bc1 (an enemy's
 // own "off the screen" flag) and 0x44e62e (off the screen (point, radius)).
+// After the sphere's test the draw asks a second thing: is it in front of the
+// camera, [data +0x64] - near > radius + [data +0x68]. +0x64 is the actor's
+// depth in the game's camera, times window now / window for a zoom of 1
+// (0x4a25f7), written every frame by the actor's step (0x4a4fbe..: its place
+// through the camera's view matrix, 0x4b8eb0; the same number orders the
+// draws, [object +0x10]). That camera looks at the middle of all the players:
+// a player far behind the others is behind it, and its turtle was drawn on no
+// PC (0.13.7, a real game of three: "the characters vanish when we part";
+// lab: 62 apart, the one behind has no turtle in its own picture).
 constexpr const char* kActorDrawSig = "55 8B EC 83 EC 10 A1 ?? ?? ?? ?? 53 8B 5D 0C 56 8B 73 60 33 C9 57 8B 38 83 26 BF";
 constexpr size_t kActorDrawTest = 0x5C;  // its call of the test
 constexpr size_t kObjectData = 0x60;
+constexpr size_t kDataDepth = 0x64, kDataMargin = 0x68;
 constexpr uint32_t kOnScreen = 0x40;
+constexpr float kInFront = 1.0e9f;  // a depth the draw's second test always passes
 
 // --- RenderWare ---------------------------------------------------------------------
 // RwCamera: +4 its frame, +0x10 its sync (the view matrix and the frustum from
@@ -298,11 +309,24 @@ bool in_view(const View& v, const float* sphere, float kx, float ky, float near_
   return true;
 }
 
-// By any of the views: is the sphere seen, is it to be drawn.
-void ask(const float* sphere, float near_plane, float far_plane, bool& seen, bool& drawn) {
+// The actor draw's second test for a view: the sphere is in front of it by
+// more than its radius and the actor's own margin (the game's rule, with the
+// view's own depth and window).
+bool in_front(const View& v, const float* sphere, float near_plane, float margin) {
+  const float d[3] = {sphere[0] - v.eye[0], sphere[1] - v.eye[1], sphere[2] - v.eye[2]};
+  const float base = state_float(kBaseWindow);
+  const float depth = dot(d, v.at) * (base > 0.001f ? v.x / base : 1.0f);
+  return depth - near_plane > sphere[3] + margin;
+}
+
+// By any of the views: is the sphere seen, is it to be drawn. `margin`: the
+// actor being drawn asks (its second test goes by the views too); null: one of
+// the game's other tests.
+void ask(const float* sphere, float near_plane, float far_plane, const float* margin, bool& seen, bool& drawn) {
   seen = drawn = false;
   auto one = [&](const View& v) {
     if (!v.on) return;
+    if (margin && !in_front(v, sphere, near_plane, *margin)) return;
     drawn = drawn || in_view(v, sphere, kDrawnX, kDrawnY, near_plane, far_plane);
     seen = seen || in_view(v, sphere, kSeenX, kSeenY, near_plane, far_plane);
   };
@@ -310,7 +334,19 @@ void ask(const float* sphere, float near_plane, float far_plane, bool& seen, boo
   for (const View& v : g_player) one(v);
 }
 
-bool g_draw_tested = false, g_draw_seen = true;
+bool g_draw_tested = false, g_draw_seen = true, g_draw_drawn = true;
+bool g_draw_by_views = false;  // the actor being drawn: its second test is the views' (hkActorDraw)
+float g_draw_margin = 0;
+// The camera a picture is being drawn with ([[0x69fdfc]], as the actor draw reads it).
+void*** g_current_camera = nullptr;
+void* current_camera() { return g_current_camera && *g_current_camera ? **g_current_camera : nullptr; }
+
+// Lab ([debug] camera_trace=1): what became of each player's turtle in the
+// actor draw since the last line: calls, not tested (hidden), drawn, seen.
+struct DrawTrace {
+  uint32_t calls = 0, untested = 0, drawn = 0, seen = 0, flags = 0;
+};
+DrawTrace g_draw_trace[4];
 
 int __cdecl hkTest(void* camera, const float* sphere) {
   const uintptr_t from = reinterpret_cast<uintptr_t>(_ReturnAddress());
@@ -321,17 +357,44 @@ int __cdecl hkTest(void* camera, const float* sphere) {
     return oTest(camera, sphere);
   const auto* cam = static_cast<const uint8_t*>(camera);
   bool seen, drawn;
-  ask(sphere, *reinterpret_cast<const float*>(cam + kCamNear), *reinterpret_cast<const float*>(cam + kCamFar), seen,
-      drawn);
+  ask(sphere, *reinterpret_cast<const float*>(cam + kCamNear), *reinterpret_cast<const float*>(cam + kCamFar),
+      draw && g_draw_by_views ? &g_draw_margin : nullptr, seen, drawn);
   if (!draw) return seen ? 1 : 0;
   g_draw_tested = true;
   g_draw_seen = seen;
+  g_draw_drawn = drawn;
   return drawn ? 1 : 0;
 }
 
 void __cdecl hkActorDraw(void* scene, uint8_t* object) {
   g_draw_tested = false;
+  // In a game together "in front of the camera" is asked of every view with
+  // the sphere (hkTest), the same on every PC: the game's own depth, of the
+  // camera in the middle of all, stands aside for the draw.
+  float* depth = nullptr;
+  float kept = 0;
+  if (object && rule() && g_shared.on && current_camera() == main_camera()) {
+    if (auto* data = *reinterpret_cast<uint8_t**>(object + kObjectData)) {
+      depth = reinterpret_cast<float*>(data + kDataDepth);
+      kept = *depth;
+      g_draw_margin = *reinterpret_cast<const float*>(data + kDataMargin);
+      *depth = kInFront;
+      g_draw_by_views = true;
+    }
+  }
   oActorDraw(scene, object);
+  g_draw_by_views = false;
+  if (depth) *depth = kept;
+  if (g_trace && object)
+    for (int p = 0; p < 4; ++p)
+      if (object == four::turtle(p)) {
+        DrawTrace& t = g_draw_trace[p];
+        ++t.calls;
+        if (!g_draw_tested) ++t.untested;
+        if (g_draw_tested && g_draw_drawn) ++t.drawn;
+        if (g_draw_tested && g_draw_seen) ++t.seen;
+        if (auto* data = *reinterpret_cast<uint32_t**>(object + kObjectData)) t.flags = *data;
+      }
   // Drawn for a screen wider than most: "on the screen" only if seen.
   if (g_draw_tested && !g_draw_seen && object) {
     if (auto* data = *reinterpret_cast<uint32_t**>(object + kObjectData)) *data &= ~kOnScreen;
@@ -370,6 +433,13 @@ void trace(const uint8_t* cam, const float* m, int me) {
       at += std::snprintf(players + at, sizeof(players) - at, " p%d(%.2f %.2f %.2f)%s", p + 1, v[0], v[1], v[2],
                           g_player[p].on ? "*" : "");
   const View* own = me >= 0 && me < kPlayers && g_player[me].on ? &g_player[me] : nullptr;
+  for (int p = 0; p < 4; ++p) {
+    DrawTrace& t = g_draw_trace[p];
+    if (four::turtle(p))
+      LOGI("camera: player %d's turtle in the actor draw: %u calls, %u not tested, %u drawn, %u seen, flags %08X", p + 1,
+           t.calls, t.untested, t.drawn, t.seen, t.flags);
+    t = DrawTrace{};
+  }
   LOGI("camera: eye(%.2f %.2f %.2f) zoom %.3f window %.3f (base %.3f, distance %.2f)%s; own: weight %.2f eye(%.2f %.2f "
        "%.2f) window %.3f; the camera's window %.3f",
        m[12], m[13], m[14], state_float(kZoom), state_float(kWindowNow), state_float(kBaseWindow),
@@ -544,6 +614,8 @@ void install(const Config& cfg) {
   if (task && draw && patch::read<uint8_t>(draw + kActorDrawTest) == 0xE8) test = target_of(draw + kActorDrawTest);
   if (test && patch::in_image(test, 1)) {
     g_test_from_draw = draw + kActorDrawTest + 5;
+    if (const uintptr_t current = patch::read<uint32_t>(draw + 7); patch::in_image(current, 4))
+      g_current_camera = reinterpret_cast<void***>(current);
     // The game's other tests that end in "off the screen = !result" (neg eax; sbb eax, eax).
     size_t n = 0;
     for (uintptr_t call : patch::find_calls(test)) {

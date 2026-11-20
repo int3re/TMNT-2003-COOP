@@ -158,6 +158,7 @@ add_library(tmntnet MODULE
   src/mod/load_guard.cpp
   src/mod/host_menus.cpp
   src/mod/net_pause.cpp
+  src/mod/movie_sync.cpp
   src/mod/level_marks.cpp
   src/mod/costume.cpp
   src/mod/own_camera.cpp

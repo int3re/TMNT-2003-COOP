@@ -1425,7 +1425,7 @@ runs\steam-test-2026-11-18-0.13.0 (the friend's was not there).
 with players=1 at frame ~215. Then: "player 1 chooses the costume of turtle 2" (frame 431), 28
 frames in 8.4 s ("waited for the other PC 142 times, 10203 ms in all"), "wears costume 0", state 3,
 back to 2, a second pick (costume 1), 100 frames in 10 s, state 7 without a turn of player 2, then at
-state 8 "Sky6hadow silent for 10 s, dropping the session", and "Steam session accepted" from it 0.6 s
+state 8 "<the guest's name> silent for 10 s, dropping the session", and "Steam session accepted" from it 0.6 s
 later, twice.
 
 **Why the story was for one.** НАЧАТЬ ИГРУ (lockstep::host_autostart) pressed start at frame 180,
@@ -1696,3 +1696,80 @@ minimized by something else; focus1 (39 forced foreground changes): the same; fo
 in the frame, B 423). display.cpp points the exe's import of IsIconic at `hkIsIconic`: FALSE for
 the game's window while a session is set. focus3: 27 minimizes and restores, 7953 frames the same.
 
+## 36. A game of three over Steam with 0.13.7: far apart, a movie's end, the dojo, the score (tmntnet 0.13.8, protocol v12)
+
+The user's log of 2026-11-20 05:02..05:38 (host, three PCs over Steam, delay 2): stages 1..5, the
+chapter's save, the dojo (stage 6), the second map's movie, its first stage. Said by the players:
+"the characters vanish when we walk away from each other", "it lags at times", "in the level for one
+character all should take part", "on the next map player 3 was gone though he saw everything", "after
+a level player 3's score is 0". In the log besides: `DESYNC at frame 124020` a second before the
+second map's first stage, `player 3's character 2 is not loaded; not made` there, one watchdog line.
+
+**The actor draw's second test.** `0x4a5012(scene, object)` after the sphere's test (§31):
+`fld [data +0x64]; fsub [camera +0x80]; fld radius; fadd [data +0x68]; fcompp; test ah, 5; jp skip`
+— drawn only when `depth - near > radius + margin`. +0x64 is written every frame by the actor's
+step (`0x4a4fbe`: `0x4a25ab()` the game's RenderWare camera, `0x4b8eb0(&data +0x5C, place, 1, camera
++0x20)` its place in the camera's space, times `0x4a25f7()` = [0x61cf00] / [0x61cefc], window now /
+window for a zoom of 1; `[object +0x10] = int(that * [0x58bc3c])` orders the draws). No other code
+reads +0x64 as a float. That camera is the game's own, in the middle of all the players: the
+player who stays behind the others is behind its eye, the test fails, and its turtle (and the
+enemies around it) are drawn on no PC while its own camera looks at them. Lab far138 (two PCs,
+62 apart in stage 1): the one behind has no turtle in its picture; with the fix (far138c) it has.
+own_camera.cpp: `hkActorDraw` puts a depth that always passes into +0x64 for the draw and back
+after it; `hkTest` (the draw's call) asks every view `in_front` (its own depth and window, the
+actor's margin) before the sphere. The same on every PC (the views are).
+
+**A movie's end.** The movie task: made by `0x490740(task)` (0xBC bytes, the Sofdec player at +0x28),
+step `0x4908c2(task)`: `(0x4a9595(1) | 0x4a9595(0)) & 0x10800` (decide or start held in pad slot 1 or
+0) with `[0x61cd7c] & 1` (may be skipped) stops the player (vtable +0x1C), sets +0xAC and ends the
+task at once (`jmp 0x4ab3e9`); else `0x53f9d0()`, `0x53f1f0(player, task +0x60)` and, with no picture
+there, the status (vtable +0x20): 3 or 4 set +0xAC for the next step. The draw `0x490957` asks the
+status too. So a movie watched to its end is over by each PC's clock; the stage after it loads some
+frames apart and its dice part the games. movie_sync.cpp: hooks on the make (a new movie: nothing of
+the one before) and the step: +0xAC found set says "this PC's is over" and is cleared; lockstep
+carries that as bit 10 of the PC's buttons (`kMovieOver`, with `kStoryWord` not a button of the
+game's), `movie_over_mask()` / `present_mask()` give the frame's bits and who is in the session; the
+step sets +0xAC when all present have said so, or `kPatience` (600) frames after the first; the bits
+of a movie's first `kGrace` (30) frames are not counted (a skipped movie's PC may still say "over"
+for the frames on their way, 12 at most). A PC that came back into the game during the movie says
+"over" at once. Lab keys: `movie_late=N` (this PC hears its end N frames later), `movie_sync=0` (as
+before).
+
+**The players' loads are counted.** `0x493e90` loads each of players 1 and 2's characters
+(`0x493c92(character)` -> per character, e.g. `0x427fef`: `inc [0x60eb88]`, loads at 0) and sets
+the number of players (`0x404399`); `0x493ec0` frees them (`0x42767f`: dec, frees at 0). The story
+loads once (`0x494590`); the dojo's scene (code `0x490a..0x4912`) loads again at its start
+(`0x491184`, then `0x404c8f`) and frees at its end (`0x490ebd`). four_players.cpp kept one number
+per extra player: the dojo's free "unloaded" players 3 and 4. Now `g_load_count`.
+
+**The stages for one turtle.** `0x40498a()`: [info +0x13C] (the stage) is 6, 0x13 or 0x1E. Asked by
+the level's makers (`0x411b7b`: then `0x4117c9`, player 1 alone, else `0x4115d9`, both), the level
+task's round (`0x411584`: `0x4114fa`, only player 1's continue check and the pause), the panel
+(`0x40c94c`, `0x40dd59`), the turtle (`0x432295`, `0x43274c`) and the story's flow (`0x4946b0`). In a
+game together the makers' call goes through `solo_stage_for_makers` and hears 0.
+
+**The score between levels.** A level's start (`0x404cad`, from `0x411db5`) clears, per player,
++0x48, +0x54, +0x60, +0x64, +0x6C..+0x80 of its record, not +0x68 (the score a turtle's end left for
+the next one, `0x432177`) and not the ints at +0x28 (the shurikens). `0x404c8f` (the story's start
+`0x4945ed`, `0x494781`; the dojo's `0x490c09`, `0x491189`): [info +0x24] = [0x5df824], +0x68 and +0xAC
+(the two scores) = 0, then `0x404c3f`: the ints {10, 0, 0} for both. tmntnet cleared players 3 and
+4's whole record at every level; now as the game (`hkResetGame`, `hkNewRun`). The level's bonus:
+the story's results step (`0x494cce`) calls `0x4949f1` (player in esi) for player 1 and, if it
+takes part and has a character, player 2: `0x49496c(p)` (20 a second under the stage's par time,
+10 * record +0x80, 2000 - 100 * (0x4049e8() - record +0x64) if above 0) goes to +0x70, is added to
++0x6C and to +0x68. four_players.cpp: the step's first call (takes part (0)) goes through
+`results_takes_part`, which calls `0x4949f1` for players 3 and 4 first.
+
+**Lab** (runs\): far138 / far138c (two PCs 56..62 apart: the turtle of the one behind missing /
+drawn; 9772 frames the same); movie138fix (the second map's movie watched to its end, B with
+movie_late=40: own ends at frames 5607 and 5608, over for both at 5651, the stage's players made
+in the same frame); dojo3 (three PCs, stage 6: all three made, loads 2 -> 1 at the dojo's end,
+10 224 frames the same); bonus3 (three PCs, level 1 over at frame 6000, level 2): player 3's score 0 + the bonus 5300, its
+level 2 turtle starts with 5300; 15 047 frames the same on the three.
+
+**The lags.** The host's ten-second lines: 600 frames in most, 43..55 a second in ten of them
+(waits small in most of those: the host's own frames were long, or the others' were and the
+pacing followed), and one stand-still of 5 s: the watchdog found the game's thread in ntdll under
+USER32 and GameOverlayRenderer.dll, called from the main loop (`0x4b25b1` in `0x4b2525`): a window
+message that took that long. Whose PC was waited for could not be read from the line; now it says
+the frames played and the time waited by player.

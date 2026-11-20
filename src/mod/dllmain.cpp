@@ -26,6 +26,7 @@
 #include "mod/costume.h"
 #include "mod/own_camera.h"
 #include "mod/host_menus.h"
+#include "mod/movie_sync.h"
 #include "mod/net_pause.h"
 #include "mod/level_marks.h"
 #include "mod/load_guard.h"
@@ -429,6 +430,7 @@ void init(const char* how) {
   story_menu::install(cfg);
   host_menus::install(cfg);
   net_pause::install(cfg);
+  movie_sync::install(cfg);
   level_marks::install(cfg);
   costume::install(cfg);
   own_camera::install(cfg);

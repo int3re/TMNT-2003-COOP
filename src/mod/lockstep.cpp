@@ -175,6 +175,13 @@ constexpr uint16_t kStoryWord = 1u << 9;
 // raw for it (0x4b0d74), which a session blanks: here it goes with the
 // buttons, and every PC sees whose it was in the same frame.
 constexpr uint16_t kPauseSlot = 1u << 8;
+// A movie's end (movie_sync.cpp): the game ends a movie when its player says
+// "played to the end", which every PC hears by its own clock. Here each PC
+// says so with bit 10 of its buttons (the key table's other slot without a
+// key), and every game reads the same bits in the same frame.
+constexpr uint16_t kMovieOver = 1u << 10;
+std::atomic<bool> g_movie_over_here{false};  // this PC's movie has played to the end
+uint32_t g_movie_mask = 0, g_present_mask = 0;  // game thread: this frame's bits by player; who is in the session
 constexpr uint32_t kStoryFrames = 900;  // how long the start may take (the menu comes up, the screen goes over)
 bool g_auto_said = false;               // the word went out
 uint32_t g_auto_from = 0;
@@ -233,6 +240,8 @@ std::atomic<bool> g_esc_down{false};    // this keyboard's Esc, as the game's po
 bool g_heard = false;  // the other PC's buttons have come at least once
 bool g_desync_logged = false;
 uint32_t g_stalls = 0, g_stall_ms = 0, g_stall_max = 0, g_stat_at = 0;
+uint32_t g_stall_by[kMaxPlayers] = {};  // ... the time by the player whose buttons were not here
+uint32_t g_stat_frame = 0;              // the frame of the last line (how many were played since)
 
 bool g_probe_synced = false;  // (the lab probe below)
 
@@ -590,6 +599,8 @@ void try_begin() {
   g_desync_logged = false;
   g_stalls = g_stall_ms = 0;
   g_stat_at = GetTickCount();
+  g_stat_frame = 0;
+  for (uint32_t& b : g_stall_by) b = 0;
   for (HashAt& h : g_local_hash) h = HashAt{};
   clear_history();
   g_now.store(0);
@@ -708,6 +719,7 @@ bool wait_all(const Start& s) {
       ++g_stalls;
       g_stall_ms += took;
       g_stall_max = std::max<uint32_t>(g_stall_max, took);
+      g_stall_by[late] += took;
       if (took >= 1500) {  // (that game stood still: its window away, its PC busy, the way to it)
         LOGW("lockstep: frame %u waited %u ms for player %d's buttons", g_n, (unsigned)took, late + 1);
         native_menu::notify("ЖДАЛИ ИГРОКА", std::to_string(late + 1) + ": " + std::to_string((took + 500) / 1000) + " С");
@@ -754,6 +766,8 @@ void __cdecl hkMasks() {
   ReleaseSRWLockShared(&g_lock);
   uint16_t local = (uint16_t)g_masks[0];  // this PC's own player 1: its keys, gamepad, mouse
   if (g_esc_down.load(std::memory_order_relaxed)) local |= kPauseSlot;  // (whatever the key table says of slot 8)
+  local &= (uint16_t)~kMovieOver;
+  if (g_movie_over_here.load(std::memory_order_relaxed)) local |= kMovieOver;
   publish_local(s, local);
   if (!wait_all(s)) return;
   if (g_n >= (uint32_t)s.delay) {
@@ -762,13 +776,17 @@ void __cdecl hkMasks() {
   }
   uint32_t h = fnv(2166136261u, hold_rand());
   uint16_t row[kMaxPlayers] = {};
+  const uint16_t words = kStoryWord | kMovieOver;  // not buttons of the game's
+  g_movie_mask = g_present_mask = 0;
   for (int p = 0; p < kGamePlayers; ++p) {
     uint16_t held = (p < s.players && g_n >= (uint32_t)s.delay) ? buttons_at(p, g_n) : 0;
     row[p] = held;
     h = fnv(h, held);
     // The host's word (НАЧАТЬ ИГРУ) is not a button of the game's.
     if (p == 0 && (held & kStoryWord)) g_story_cmd = g_n + 1;
-    held &= (uint16_t)~kStoryWord;
+    if (held & kMovieOver) g_movie_mask |= 1u << p;
+    if (p < s.players && !gone_at(p, g_n)) g_present_mask |= 1u << p;
+    held &= (uint16_t)~words;
     g_masks[p * 3 + 0] = held;
     g_masks[p * 3 + 1] = held & ~g_prev[p];
     g_masks[p * 3 + 2] = g_prev[p] & ~held;
@@ -780,8 +798,10 @@ void __cdecl hkMasks() {
   for (int p = kGamePlayers; p < kMaxPlayers; ++p) {
     uint16_t held = (p < s.players && g_n >= (uint32_t)s.delay) ? buttons_at(p, g_n) : 0;
     row[p] = held;
-    four::set_buttons(p, held & (uint16_t)~kStoryWord);
+    four::set_buttons(p, held & (uint16_t)~words);
     if (p < s.players) h = fnv(h, held);
+    if (held & kMovieOver) g_movie_mask |= 1u << p;
+    if (p < s.players && !gone_at(p, g_n)) g_present_mask |= 1u << p;
   }
   g_pause_by = -1;
   for (int p = 0; p < kMaxPlayers; ++p) {
@@ -814,10 +834,20 @@ void __cdecl hkMasks() {
   }
   DWORD now = GetTickCount();
   if (now - g_stat_at >= 10000) {
-    LOGI("lockstep: frame %u, waited for the other PC %u times, %u ms in all, %u ms at the longest (10 s)", g_n,
-         g_stalls, g_stall_ms, g_stall_max);
+    // (who was waited for and how many frames were played: a real game of
+    // three "lagged at times", and its host's log could not say whose PC it was)
+    char by[96] = "";
+    size_t at = 0;
+    for (int p = 0; p < kMaxPlayers; ++p)
+      if (g_stall_by[p] && at < sizeof(by))
+        at += std::snprintf(by + at, sizeof(by) - at, "%s player %d %u ms", at ? "," : "", p + 1, g_stall_by[p]);
+    LOGI("lockstep: frame %u, waited for the other PC %u times, %u ms in all, %u ms at the longest (10 s); %u frames "
+         "in %u ms%s%s",
+         g_n, g_stalls, g_stall_ms, g_stall_max, g_n - g_stat_frame, (unsigned)(now - g_stat_at), at ? "; for" : "", by);
     g_stalls = g_stall_ms = g_stall_max = 0;
+    for (uint32_t& b : g_stall_by) b = 0;
     g_stat_at = now;
+    g_stat_frame = g_n;
   }
 }
 
@@ -1250,6 +1280,10 @@ int players() {
 }
 
 int pause_asked_by() { return g_state.load() == (int)State::Running ? g_pause_by : -1; }
+
+void set_movie_over(bool over) { g_movie_over_here.store(over, std::memory_order_relaxed); }
+uint32_t movie_over_mask() { return g_state.load() == (int)State::Running ? g_movie_mask : 0; }
+uint32_t present_mask() { return g_state.load() == (int)State::Running ? g_present_mask : 0; }
 
 bool waiting_for_buttons() { return g_waits_for_buttons.load(); }
 unsigned long game_thread() { return g_game_thread; }
