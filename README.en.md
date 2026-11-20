@@ -8,7 +8,7 @@ Everyone runs their own copy of the game on their own PC. Connection goes throug
 
 <a href="docs/LAUNCHER.md"><img src="docs/images/launcher-hero.png" alt="The tmntnet launcher: 0.13.9 in the game folder, 0.14.0 on GitHub, an update button and a what's-new sheet" width="860"></a>
 
-[![Download the launcher](https://img.shields.io/badge/Download%20the%20launcher-tmntnet--launcher.exe-8BE836?style=for-the-badge&labelColor=0A1310)](https://github.com/int3re/TMNT-2003-COOP/releases/latest/download/tmntnet-launcher.exe)
+<a href="https://github.com/int3re/TMNT-2003-COOP/releases/latest/download/tmntnet-launcher.exe"><img src="https://img.shields.io/badge/Download%20the%20launcher-tmntnet--launcher.exe-8BE836?style=for-the-badge&amp;labelColor=0A1310" alt="Download the launcher: tmntnet-launcher.exe" height="46"></a>
 
 One file: installs the mod with no network, checks for updates by itself, starts the game.
 

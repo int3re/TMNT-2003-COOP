@@ -8,7 +8,7 @@
 
 <a href="docs/LAUNCHER.md"><img src="docs/images/launcher-hero.png" alt="Лаунчер tmntnet: в папке игры версия 0.13.9, на GitHub 0.14.0, кнопка «Обновить до 0.14.0» и лист «Что нового»" width="860"></a>
 
-[![Скачать лаунчер](https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C%20%D0%BB%D0%B0%D1%83%D0%BD%D1%87%D0%B5%D1%80-tmntnet--launcher.exe-8BE836?style=for-the-badge&labelColor=0A1310)](https://github.com/int3re/TMNT-2003-COOP/releases/latest/download/tmntnet-launcher.exe)
+<a href="https://github.com/int3re/TMNT-2003-COOP/releases/latest/download/tmntnet-launcher.exe"><img src="https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C%20%D0%BB%D0%B0%D1%83%D0%BD%D1%87%D0%B5%D1%80-tmntnet--launcher.exe-8BE836?style=for-the-badge&amp;labelColor=0A1310" alt="Скачать лаунчер: tmntnet-launcher.exe" height="46"></a>
 
 Один файл: ставит мод без интернета, сам проверяет обновления, запускает игру.
 
