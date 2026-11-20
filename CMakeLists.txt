@@ -278,6 +278,52 @@ else()
   message(WARNING "Ultimate ASI Loader not built: tmntnet-setup.exe is skipped (tools/build_asi_loader.ps1)")
 endif()
 
+# --- tmntnet-launcher.exe: the window players start from ------------------------
+# Shows the mod's version in the game folder and the latest release on GitHub,
+# installs and updates the mod, starts the game. Inside the file: its three
+# faces (third_party/fonts), its icon and tmntnet-setup.exe of this very build,
+# so that a first install needs no network.
+file(STRINGS ${CMAKE_SOURCE_DIR}/src/common/version.h LAUNCHER_VERSION_LINE REGEX "TMNTNET_VERSION")
+string(REGEX MATCH "\"([0-9.]+)\"" LAUNCHER_VERSION_MATCH "${LAUNCHER_VERSION_LINE}")
+string(REPLACE "." "," LAUNCHER_VERSION_COMMAS "${CMAKE_MATCH_1}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/common/version.h)
+set(LAUNCHER_SETUP_RC "")
+if(TARGET tmntnet_setup)
+  set(LAUNCHER_PAYLOAD_DIR ${CMAKE_BINARY_DIR}/launcher-payload)
+  add_custom_target(launcher_payload
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${LAUNCHER_PAYLOAD_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:tmntnet_setup> ${LAUNCHER_PAYLOAD_DIR}/
+    BYPRODUCTS ${LAUNCHER_PAYLOAD_DIR}/tmntnet-setup.exe)
+  add_dependencies(launcher_payload tmntnet_setup)
+  set(LAUNCHER_SETUP_RC "RES_SETUP RCDATA \"${LAUNCHER_PAYLOAD_DIR}/tmntnet-setup.exe\"")
+else()
+  message(WARNING "tmntnet-setup.exe is not built: tmntnet-launcher.exe will carry no installer")
+endif()
+configure_file(src/launcher/launcher.rc.in ${CMAKE_BINARY_DIR}/launcher.rc @ONLY)
+if(TARGET tmntnet_setup)
+  set_source_files_properties(${CMAKE_BINARY_DIR}/launcher.rc PROPERTIES OBJECT_DEPENDS
+                              "${LAUNCHER_PAYLOAD_DIR}/tmntnet-setup.exe")
+endif()
+add_executable(tmntnet_launcher WIN32
+  src/launcher/launcher.cpp
+  src/launcher/paint.cpp
+  src/launcher/gfx.cpp
+  src/launcher/net.cpp
+  src/launcher/update.cpp
+  src/launcher/launcher.manifest
+  ${CMAKE_BINARY_DIR}/launcher.rc)
+target_include_directories(tmntnet_launcher PRIVATE src)
+target_compile_definitions(tmntnet_launcher PRIVATE ${OUR_DEFS})
+target_compile_options(tmntnet_launcher PRIVATE ${OUR_OPTS})
+target_link_libraries(tmntnet_launcher PRIVATE d2d1 dwrite windowscodecs wininet bcrypt dwmapi ole32 shell32 advapi32
+                                               user32 gdi32)
+set_target_properties(tmntnet_launcher PROPERTIES OUTPUT_NAME "tmntnet-launcher")
+if(TARGET tmntnet_setup)
+  add_dependencies(tmntnet_launcher launcher_payload)
+endif()
+add_custom_command(TARGET tmntnet_launcher POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:tmntnet_launcher> ${CMAKE_BINARY_DIR}/dist/$<CONFIG>/)
+
 add_custom_command(TARGET dinput8_shim POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/dist/$<CONFIG>/alt-loader
   COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:dinput8_shim> ${CMAKE_BINARY_DIR}/dist/$<CONFIG>/alt-loader/)

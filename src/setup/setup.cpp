@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include "common/game_dir.h"
 #include "common/version.h"
 #include "setup/payload_ids.h"
 
@@ -39,9 +40,27 @@ std::wstring join(const std::wstring& dir, const std::wstring& name) {
 
 bool exists(const std::wstring& p) { return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES; }
 
+// A quiet run started by tmntnet-launcher.exe has no console to print to: with
+// TMNTNET_SETUP_LOG set, what it would say goes into that file as well (UTF-8).
+void log_for_launcher(const std::wstring& text) {
+  wchar_t path[MAX_PATH * 2];
+  DWORD n = GetEnvironmentVariableW(L"TMNTNET_SETUP_LOG", path, MAX_PATH * 2);
+  if (!n || n >= MAX_PATH * 2) return;
+  HANDLE f = CreateFileW(path, FILE_APPEND_DATA, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (f == INVALID_HANDLE_VALUE) return;
+  std::wstring line = text + L"\n";
+  int bytes = WideCharToMultiByte(CP_UTF8, 0, line.data(), (int)line.size(), nullptr, 0, nullptr, nullptr);
+  std::string utf8(bytes, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, line.data(), (int)line.size(), &utf8[0], bytes, nullptr, nullptr);
+  DWORD written = 0;
+  WriteFile(f, utf8.data(), (DWORD)utf8.size(), &written, nullptr);
+  CloseHandle(f);
+}
+
 void message(const std::wstring& text, bool error = false) {
   if (g_quiet) {
     fwprintf(error ? stderr : stdout, L"%ls\n", text.c_str());
+    log_for_launcher(text);
     return;
   }
   MessageBoxW(nullptr, text.c_str(), kTitle, MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION));
@@ -452,55 +471,9 @@ Result uninstall(const std::wstring& dir, std::wstring& log) {
 
 // --- finding the game ---------------------------------------------------------
 
-std::wstring reg_string(HKEY root, const std::wstring& key, const wchar_t* value, REGSAM view) {
-  HKEY k;
-  if (RegOpenKeyExW(root, key.c_str(), 0, KEY_READ | view, &k) != ERROR_SUCCESS) return L"";
-  wchar_t buf[MAX_PATH * 2];
-  DWORD size = sizeof(buf), type = 0;
-  std::wstring out;
-  if (RegQueryValueExW(k, value, nullptr, &type, reinterpret_cast<BYTE*>(buf), &size) ==
-          ERROR_SUCCESS &&
-      (type == REG_SZ || type == REG_EXPAND_SZ))
-    out.assign(buf, wcsnlen(buf, size / sizeof(wchar_t)));
-  RegCloseKey(k);
-  return out;
-}
-
-std::wstring find_game_dir() {
-  const wchar_t* base = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
-  for (HKEY root : {HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER}) {
-    for (REGSAM view : {KEY_WOW64_32KEY, KEY_WOW64_64KEY}) {
-      HKEY k;
-      if (RegOpenKeyExW(root, base, 0, KEY_READ | view, &k) != ERROR_SUCCESS) continue;
-      wchar_t name[256];
-      for (DWORD i = 0;; ++i) {
-        DWORD len = 256;
-        if (RegEnumKeyExW(k, i, name, &len, nullptr, nullptr, nullptr, nullptr) != ERROR_SUCCESS)
-          break;
-        std::wstring sub = std::wstring(base) + L"\\" + name;
-        std::wstring display = reg_string(root, sub, L"DisplayName", view);
-        if (display.find(L"Teenage Mutant Ninja Turtles") == std::wstring::npos &&
-            display.find(L"TMNT") == std::wstring::npos)
-          continue;
-        for (const wchar_t* v : {L"InstallLocation", L"Inno Setup: App Path"}) {
-          std::wstring dir = reg_string(root, sub, v, view);
-          if (!dir.empty() && exists(join(dir, L"TMNT.EXE"))) {
-            RegCloseKey(k);
-            return dir;
-          }
-        }
-      }
-      RegCloseKey(k);
-    }
-  }
-  // Running from the game folder (or next to it) also counts.
-  wchar_t self[MAX_PATH];
-  GetModuleFileNameW(nullptr, self, MAX_PATH);
-  std::wstring dir(self);
-  dir.resize(dir.find_last_of(L'\\'));
-  if (exists(join(dir, L"TMNT.EXE"))) return dir;
-  return L"";
-}
+// (The registry's uninstall entries, or the folder this program lies in: the
+// launcher looks the same way, common/game_dir.h.)
+std::wstring find_game_dir() { return gamedir::find(); }
 
 bool pick_folder(const wchar_t* title, const std::wstring& initial, std::wstring& out, HWND owner = nullptr) {
   IFileOpenDialog* dlg = nullptr;
@@ -713,8 +686,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     else dir = a;
   }
   LocalFree(argv);
-  if (g_quiet) {  // print to the parent console
-    AttachConsole(ATTACH_PARENT_PROCESS);
+  // Print to the parent's console when there is one. Started without any (by
+  // tmntnet-launcher.exe), stdout stays as it is and a print does nothing; a
+  // freopen that fails would close it, and the next print would end the
+  // program: 0.13.9 and older ended so, with the install already done.
+  if (g_quiet && AttachConsole(ATTACH_PARENT_PROCESS)) {
     FILE* f;
     freopen_s(&f, "CONOUT$", "w", stdout);
     freopen_s(&f, "CONOUT$", "w", stderr);

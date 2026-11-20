@@ -55,12 +55,14 @@ SDK скачивается с [partner.steamgames.com](https://partner.steamgame
 
 | Файл | Что это |
 |---|---|
+| `tmntnet-launcher.exe` | [лаунчер](LAUNCHER.md): окно игрока; внутри него установщик этой же сборки |
 | `tmntnet-setup.exe` | установщик; внутри него всё остальное |
 | `tmntnet.asi`, `winmm.dll`, `tmntnet.ini`, `steam_api.dll`, `steam_appid.txt` | то, что установщик кладёт в папку игры |
 | `tmntnet-client.exe` | клиент режима «игра только у хоста» |
 | `alt-loader/dinput8.dll` | запасной загрузчик |
 
-Для релиза достаточно выложить `tmntnet-setup.exe`.
+В релиз кладутся `tmntnet-launcher.exe` и `tmntnet-setup.exe` из одной сборки, а описание релиза
+делает `tools/release_notes.py` (см. [Лаунчер](LAUNCHER.md#для-разработчика)).
 
 ## Тесты без игры
 
@@ -71,6 +73,7 @@ SDK скачивается с [partner.steamgames.com](https://partner.steamgame
 | Скрипт | Что проверяет |
 |---|---|
 | `tests/run_integration.ps1` | клиент → ENet → перехват → клавиши игрока 2 (`PASS`) |
+| `tests/run_launcher_lab.ps1` | лаунчер против подставного GitHub и подставной папки игры, без окна: установка, обновление, неверная контрольная сумма, отмена, удаление и ещё семь сценариев (`ALL OK`). Нужен Python |
 | `tests/run_steam_mock.ps1` | логику Steam на моке, без Steam и аккаунтов: вход в лобби по SteamID хоста, отказ чужаку, жёсткое завершение клиента и перезапуск, выход с прощанием, Hello раньше членства в лобби, 10 % потерь и 40 мс задержки, молчаливая смерть клиента (`ALL OK`, 13 проверок) |
 | `tests/run_chaos.ps1 -ChaosDir <папка>` | путь LAN/IP через «плохую сеть» из [coop-anything](https://github.com/cranebeaker/coop-anything/tree/main/tools/chaos) и обрыв на 2,5 с посередине |
 

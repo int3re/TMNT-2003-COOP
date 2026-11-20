@@ -1,0 +1,44 @@
+#include <winver.h>
+#include "@CMAKE_SOURCE_DIR@/src/launcher/resource.h"
+#include "@CMAKE_SOURCE_DIR@/src/common/version.h"
+
+IDI_LAUNCHER ICON "@CMAKE_SOURCE_DIR@/src/launcher/launcher.ico"
+
+// The window's three faces (third_party/fonts, SIL Open Font License 1.1).
+RES_FONT_DELA      RCDATA "@CMAKE_SOURCE_DIR@/third_party/fonts/DelaGothicOne-Regular.ttf"
+RES_FONT_ONEST_400 RCDATA "@CMAKE_SOURCE_DIR@/third_party/fonts/Onest-Regular.ttf"
+RES_FONT_ONEST_600 RCDATA "@CMAKE_SOURCE_DIR@/third_party/fonts/Onest-SemiBold.ttf"
+RES_FONT_ONEST_700 RCDATA "@CMAKE_SOURCE_DIR@/third_party/fonts/Onest-Bold.ttf"
+RES_FONT_MONO_500  RCDATA "@CMAKE_SOURCE_DIR@/third_party/fonts/JetBrainsMono-Medium.ttf"
+RES_FONT_MONO_700  RCDATA "@CMAKE_SOURCE_DIR@/third_party/fonts/JetBrainsMono-Bold.ttf"
+
+// What this version is about: the sheet's words when the launcher offers what it carries.
+RES_NOTES RCDATA "@CMAKE_SOURCE_DIR@/dist/release.txt"
+
+// tmntnet-setup.exe of this build (absent when the installer was not built).
+@LAUNCHER_SETUP_RC@
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION @LAUNCHER_VERSION_COMMAS@,0
+PRODUCTVERSION @LAUNCHER_VERSION_COMMAS@,0
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", "tmntnet launcher: network co-op mod for TMNT (2003), updates from GitHub"
+      VALUE "ProductName", "tmntnet"
+      VALUE "FileVersion", TMNTNET_VERSION
+      VALUE "ProductVersion", TMNTNET_VERSION
+      VALUE "OriginalFilename", "tmntnet-launcher.exe"
+      VALUE "LegalCopyright", "MIT License. An unofficial fan-made mod."
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0409, 0x04B0
+  END
+END

@@ -6,7 +6,7 @@
 
 Everyone runs their own copy of the game on their own PC. Connection goes through Steam: no port forwarding, no VPN.
 
-![version](https://img.shields.io/badge/version-0.13.9-2ea44f)
+![version](https://img.shields.io/badge/version-0.14.0-2ea44f)
 ![protocol](https://img.shields.io/badge/net_protocol-12-blue)
 ![platform](https://img.shields.io/badge/Windows-x86-0078d6?logo=windows)
 ![players](https://img.shields.io/badge/players-1%E2%80%934-orange)
@@ -107,8 +107,10 @@ Every menu and every screen in order, with a note on each new row (in Russian):
 
 ## Quick start
 
-1. **Every player:** download `tmntnet-setup.exe` from [Releases](../../releases/latest), run it
-   and press the install button (**«Установить мод»**). The installer finds the game folder itself.
+1. **Every player:** download `tmntnet-launcher.exe` from [Releases](../../releases/latest), run it
+   and press the install button (**УСТАНОВИТЬ МОД**). The launcher finds the game folder itself and
+   needs no network to install; afterwards it tells you about new versions on GitHub and updates
+   the mod with one button ([docs/LAUNCHER.md](docs/LAUNCHER.md), in Russian).
 2. **Everyone:** start Steam (own accounts, you must be Steam friends) and the game.
 3. **Host:** main menu → **СЕТЕВАЯ ИГРА** (Network game) → **ПРИГЛАСИТЬ ДРУГА** (Invite a friend).
    Once everybody has pressed **Я ГОТОВ** (Ready) → **НАЧАТЬ ИГРУ** (Start). Then each player
@@ -134,6 +136,7 @@ Every menu and every screen in order, with a note on each new row (in Russian):
 | | |
 |---|---|
 | [Visual tour](docs/TOUR.md) | every menu and screen of the mod in pictures, before and after |
+| [Launcher](docs/LAUNCHER.md) | one-file install, updates from GitHub, proxy |
 | [Install / uninstall](docs/INSTALL.md) | what is installed, updating, silent install |
 | [Playing online](docs/PLAY.md) | host and guests, the lobby, character select, pause, coming back |
 | [Controls](docs/CONTROLS.md) | keyboard, mouse, gamepads, several players on one PC |
@@ -165,7 +168,7 @@ is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [re/notes.md](re/notes.md
 
 ## Status
 
-Under active development, version **0.13.9**. The story has been played by two, three and four
+Under active development, version **0.14.0**. The story has been played by two, three and four
 players over Steam in real sessions; what broke in each was fixed afterwards (see the changelog).
 
 Known limits:

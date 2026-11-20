@@ -1,2 +1,2 @@
 #pragma once
-#define TMNTNET_VERSION "0.13.9"
+#define TMNTNET_VERSION "0.14.0"

@@ -21,6 +21,7 @@
 | `dinput8.dll` | запасной загрузчик (свой, маленький) | `src/loader` |
 | `tmntnet-client.exe` | клиент второго игрока для режима «игра только у хоста» | `src/client` |
 | `tmntnet-setup.exe` | установщик: все файлы вшиты в ресурсы | `src/setup` |
+| `tmntnet-launcher.exe` | [лаунчер](LAUNCHER.md): версии, обновления с GitHub, запуск игры; установщик вшит в ресурсы | `src/launcher` |
 
 Игра — 32-битный процесс без античита и ASLR, движок RenderWare 3.5 (Direct3D 9), ввод через
 DirectInput 8, звук через DirectSound и CRI ADX. Всё собирается под **x86**.
@@ -236,6 +237,7 @@ src/mod/      tmntnet.asi
   autosave / load_guard / quality / ambient / overlay   остальное
 src/client/   tmntnet-client.exe (SDL2, ImGui)
 src/setup/    tmntnet-setup.exe
+src/launcher/ tmntnet-launcher.exe (Direct2D, WinINet)
 src/loader/   запасной загрузчик dinput8.dll
 tests/        подставная игра и тесты без игры
 re/           заметки по реверсу, сигнатуры
