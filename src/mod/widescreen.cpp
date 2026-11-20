@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <intrin.h>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -208,8 +209,33 @@ bool g_key_table = false;     // the key table is up: its oversize frame is not 
 
 bool screen_size(int& W, int& H);
 
+// Lab ([debug] text_trace=1): each text the game writes, once: its bytes as they are (the Russian
+// version's fonts have Russian letters at Latin codes), where it goes and who asked.
+void trace_text(const char* text, float height, const float* box, const void* caller) {
+  static uint32_t seen[512];
+  static int n = 0;
+  uint32_t h = 2166136261u;
+  for (const char* c = text; *c && c - text < 200; ++c) h = (h ^ (uint8_t)*c) * 16777619u;
+  h ^= (uint32_t)(uintptr_t)caller;
+  for (int i = 0; i < n; ++i)
+    if (seen[i] == h) return;
+  if (n >= 512) return;
+  seen[n++] = h;
+  char out[400];
+  size_t at = 0;
+  for (const char* c = text; *c && at + 5 < sizeof(out) && c - text < 120; ++c) {
+    const uint8_t b = (uint8_t)*c;
+    if (b >= 32 && b < 127) out[at++] = (char)b;
+    else at += std::snprintf(out + at, sizeof(out) - at, "<%02X>", b);
+  }
+  out[at] = 0;
+  LOGI("text: \"%s\" height %.1f box (%.0f %.0f %.0f %.0f) from %p", out, height, box ? box[0] : 0, box ? box[1] : 0,
+       box ? box[2] : 0, box ? box[3] : 0, caller);
+}
+
 void __cdecl hkTextInBox(const char* text, float height, const float* box, int align) {
   if (g_text_font && !*g_text_font) return;  // (no font: nothing to write with)
+  if (g_cfg.debug_text_trace && text) trace_text(text, height, box, _ReturnAddress());
   int W, H;
   IDirect3DDevice9* dev = overlay::device();
   D3DVIEWPORT9 vp{};

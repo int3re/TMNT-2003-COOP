@@ -293,6 +293,7 @@ bool load_config(const std::wstring& path, Config& cfg) {
   cfg.debug_rand_trace = ini.get_int("debug", "rand_trace", 0) != 0;
   cfg.debug_task_log = ini.get_int("debug", "task_log", 0) != 0;
   cfg.debug_stall_at = std::max(0, ini.get_int("debug", "stall_at", 0));
+  cfg.debug_text_trace = ini.get_int("debug", "text_trace", 0) != 0;
   cfg.debug_movie_sync = ini.get_int("debug", "movie_sync", 1) != 0;
   cfg.debug_movie_late = std::clamp(ini.get_int("debug", "movie_late", 0), 0, 100000);
   cfg.debug_level_dump = ini.get_int("debug", "level_dump", 0) != 0;

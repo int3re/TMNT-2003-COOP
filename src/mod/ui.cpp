@@ -528,9 +528,19 @@ void frame() {
   else if (in_main_menu() && !main_menu::native())
     draw_main_menu_entry(st, W, H);  // fallback when the menu could not be patched
 
-  native_menu::set_badge(st.p2 && !in_main_menu() && !native_menu::active()
-                             ? "P2 " + native_menu::latin(st.p2_name) + "  " + std::to_string(st.rtt_ms) + " MS"
-                             : std::string());
+  // The corner's badge: the guests and the way to each. One guest: its name
+  // too; more (until 0.13.9 the badge spoke of player 2 alone): each
+  // player's number and milliseconds.
+  std::string badge;
+  if (st.p2 && !in_main_menu() && !native_menu::active()) {
+    if (st.guests.size() > 1) {
+      for (const HostStatus::Guest& g : st.guests)
+        badge += (badge.empty() ? "" : "   ") + ("P" + std::to_string(g.player) + " " + std::to_string(g.rtt_ms) + " MS");
+    } else {
+      badge = "P2 " + native_menu::latin(st.p2_name) + "  " + std::to_string(st.rtt_ms) + " MS";
+    }
+  }
+  native_menu::set_badge(badge);
   if (g_open) draw_toasts(W);  // (the F2 window's own messages)
 
   ImGui::PopFont();

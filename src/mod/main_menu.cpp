@@ -16,6 +16,7 @@
 #include "mod/costume.h"
 #include "mod/csel.h"
 #include "mod/csel_art.h"
+#include "mod/dojo_art.h"
 #include "mod/four_hud.h"
 #include "mod/load_guard.h"
 #include "mod/lockstep.h"
@@ -235,6 +236,12 @@ void draw_sprite(uint8_t* quad) {
   if (quad && native_menu::covers_screen() && texture_named(quad, "menu_cursor")) return;  // a page is over the menu
   if (const uint8_t* tex = quad ? *reinterpret_cast<const uint8_t* const*>(quad + 0x18) : nullptr) {
     if (g_trace_textures && csel::on_screen()) trace_texture(reinterpret_cast<const char*>(tex + 0x10));
+    if (IDirect3DTexture9* t = dojo_art::instead_of(tex)) {  // the dojo's title card in a game together
+      widescreen::set_texture_override(t);
+      oDrawSprite(quad);
+      widescreen::set_texture_override(nullptr);
+      return;
+    }
     if (IDirect3DTexture9* t = csel_art::instead_of(tex)) {  // ИГРОК 3 / 4 in the character select
       widescreen::set_texture_override(t);
       oDrawSprite(quad);

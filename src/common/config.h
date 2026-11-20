@@ -131,6 +131,7 @@ struct Config {
   // frame's rand() state to tmntnet-frames.log, rand_trace=1 also its callers.
   bool debug_multi_instance = false;
   bool debug_light = false;  // light=1: the frame wait sleeps instead of spinning a core
+  bool debug_text_trace = false;  // text_trace=1: every text the game writes with its fonts (once each), to tmntnet.log
   bool debug_hud_trace = false;  // hud_trace=1: the play screen's sprites, once per call site
   int debug_stage = 0;           // stage=N: the level map's choice starts story stage N (lab)
   bool debug_auto_ready = false; // auto_ready=1 (default with autostart): a guest is ГОТОВ by itself (lab)

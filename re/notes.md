@@ -1767,6 +1767,16 @@ in the same frame); dojo3 (three PCs, stage 6: all three made, loads 2 -> 1 at t
 10 224 frames the same); bonus3 (three PCs, level 1 over at frame 6000, level 2): player 3's score 0 + the bonus 5300, its
 level 2 turtle starts with 5300; 15 047 frames the same on the three.
 
+**The dojo's title cards (0.13.9).** `dojopr_pc.txd` (TMNT.DAT entry 19; a platform-independent
+dictionary, chunk 0x23: count, then per picture name[32], mask[32], mip levels, filter, an image
+chunk 0x18 with width, height, depth, stride, the pixels and for 8 bits a 256-entry RGBA palette)
+holds dojo_title1..3 (1024 x 1024, the whole card of each dojo: the sign, "Этап Додзё", the
+dojo's name and "Только для Игрока 1", white, rows 697..740, columns 294..712, on black and the
+sign's green (0..1, 45..47, 0)); dojo_stage1..3 and dojo_dojostage are the same words alone. The
+card is one sprite (site `0x4ac938`). No text of the game's says such a thing: the exe's 1659
+strings (Russian letters at the codes of A..`) were decoded and read. dojo_art.cpp draws a copy
+with the line replaced in a game together (main_menu.cpp's sprite hook).
+
 **The lags.** The host's ten-second lines: 600 frames in most, 43..55 a second in ten of them
 (waits small in most of those: the host's own frames were long, or the others' were and the
 pacing followed), and one stand-still of 5 s: the watchdog found the game's thread in ntdll under
