@@ -83,6 +83,7 @@ try {
   Check "the latest release is found" ($log -match "check: latest $v ")
   Check "the block is read: protocol, size, checksum, launcher, two notes" ($log -match "protocol 12 since 0\.13\.8, setup tmntnet-setup\.exe \d{6,} sha [0-9a-f]{64}, launcher tmntnet-launcher\.exe, .*notes 2")
   Check "the title's entities are unescaped twice" ($log -match 'title "[^"]*& [^"]*"' -and $log -notmatch "&amp;|&lt;")
+  Check "the notes are the block's own, once" (([regex]::Matches($log, 'check: note "')).Count -eq 2 -and $log -match 'check: note "[^"<]*<[^">]*>[^"<]*\."\r?\n' -and $log -notmatch 'check: note "[^\r\n]*<pre')
   Check "nothing is downloaded" ($log -match "job: start, bundle" -and $log -notmatch "job: download")
   Check "the installer ran" ($log -match "job: setup /host ok")
   Check "the mod is in the game folder" ((Mod-Version) -eq $version -and (Test-Path (Join-Path $game "tmntnet.asi")) -and (Test-Path (Join-Path $game "winmm.dll")))

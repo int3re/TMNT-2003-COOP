@@ -63,8 +63,12 @@ def notes_html():
         lsize, lsha = facts("tmntnet-launcher.exe")
         lines += ["launcher=tmntnet-launcher.exe", "launcher_size=%d" % lsize, "launcher_sha256=" + lsha]
     lines += ["title=Проба лаунчера: «кавычки» & амперсанд", "note=Первая строка заметок.", "note=Вторая строка, с <угловыми> скобками."]
-    return ("<p>Проба лаунчера.</p>\n<details><summary>Данные для лаунчера</summary>\n"
-            '<pre class="notranslate"><code class="notranslate">' + html.escape("\n".join(lines) + "\n") + "</code></pre>\n</details>")
+    text = "\n".join(lines) + "\n"
+    # (as GitHub writes a code block: its text in the copy button's attribute too)
+    return ("<p>Проба лаунчера.</p>\n<details>\n<summary>Данные для лаунчера</summary>\n"
+            '<div class="snippet-clipboard-content notranslate position-relative overflow-auto" '
+            'data-snippet-clipboard-copy-content="' + html.escape(text.rstrip("\n"), quote=True) + '">'
+            '<pre class="notranslate"><code>' + html.escape(text, quote=False) + "</code></pre></div>\n</details>")
 
 
 def feed(host):

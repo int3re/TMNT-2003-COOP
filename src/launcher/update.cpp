@@ -150,8 +150,11 @@ std::string lower(std::string s) {
 }
 
 // The launcher's block in a release's page: key=value lines after the marker.
+// GitHub writes a code block's text twice: into an attribute of the box
+// around it (for its copy button), then as the code itself. The code is the
+// last of the two, and the page's last mention of the marker.
 bool from_block(const std::string& html, Release& out) {
-  size_t at = html.find("tmntnet-release ");
+  size_t at = html.rfind("tmntnet-release ");
   if (at == std::string::npos) return false;
   size_t end = html.find("</code>", at);
   if (end == std::string::npos) end = html.find("</pre>", at);
