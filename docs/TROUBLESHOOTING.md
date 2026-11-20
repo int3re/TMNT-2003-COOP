@@ -134,7 +134,7 @@ lockstep: DESYNC at frame 12420 (here FCD6847E, there AE20CEC5): the games are n
 
 | Строка | Что значит |
 |---|---|
-| `tmntnet 0.14.0 (protocol v12)` | версия мода и протокола |
+| `tmntnet 0.15.0 (protocol v12)` | версия мода и протокола |
 | `lockstep: frame …, waited … ; 598 frames in 10000 ms; for player 2 … ms` | раз в 10 секунд: сколько кадров сыграно (600 — полная скорость) и сколько времени ждали кнопок каждого игрока. Кого ждали дольше — тот ПК или связь с ним и тормозит |
 | `signature … : 0 matches` | мод не нашёл место в коде игры (другой `TMNT.EXE`) |
 | `Steam ready`, `Steam lobby … created` | Steam подключён, лобби создано |

@@ -6,11 +6,11 @@
 
 Everyone runs their own copy of the game on their own PC. Connection goes through Steam: no port forwarding, no VPN.
 
-<a href="docs/LAUNCHER.md"><img src="docs/images/launcher-hero.png" alt="The tmntnet launcher: 0.13.9 in the game folder, 0.14.0 on GitHub, an update button and a what's-new sheet" width="860"></a>
+<a href="docs/LAUNCHER.md"><img src="docs/images/launcher-hero.png" alt="The tmntnet launcher: the mod's version in the game folder, a newer one on GitHub, an update button and a what's-new sheet" width="860"></a>
 
 <a href="https://github.com/int3re/TMNT-2003-COOP/releases/latest/download/tmntnet-launcher.exe"><img src="https://img.shields.io/badge/Download%20the%20launcher-tmntnet--launcher.exe-8BE836?style=for-the-badge&amp;labelColor=0A1310" alt="Download the launcher: tmntnet-launcher.exe" height="46"></a>
 
-One file: installs the mod with no network, checks for updates by itself, starts the game.
+One file: installs the mod with no network, checks for updates by itself, sets the game's graphics, sound and keys, starts the game.
 
 [![version](https://img.shields.io/github/v/release/int3re/TMNT-2003-COOP?label=version&color=2ea44f)](../../releases/latest)
 ![protocol](https://img.shields.io/badge/net_protocol-12-blue)
@@ -76,20 +76,32 @@ modified: the mod works in memory and is removed with one button.
 
 `tmntnet-launcher.exe` is the window a player starts from. It shows which version of the mod is
 in the game folder and which one is the latest on GitHub, tells what is new in it, and updates
-the mod with one button.
+the mod with one button. Its settings hold the game's graphics, sound and keys: the same rows as in
+the game's own menus.
 
 | A new version is out | The download, checked by SHA-256 |
 |---|---|
-| ![The launcher: an update is available](docs/images/launcher.png) | ![The launcher: downloading, 62 %](docs/images/launcher-download.png) |
+| ![The launcher: an update is available](docs/images/launcher.png) | ![The launcher: downloading an update](docs/images/launcher-download.png) |
 
-| Settings: updates, proxy, game folder | Four headband colours to pick from |
+| The game's graphics, without starting the game | Sound: volumes, movies, the intro |
 |---|---|
-| ![The launcher's settings](docs/images/launcher-settings.png) | ![The launcher in blue, red, purple and orange](docs/images/launcher-accents.png) |
+| ![The Graphics page of the launcher's settings](docs/images/launcher-graphics.png) | ![The Sound page of the launcher's settings](docs/images/launcher-sound.png) |
+
+| Controls: keys, mouse buttons, layouts | Four headband colours to pick from |
+|---|---|
+| ![The Controls page of the launcher's settings](docs/images/launcher-controls.png) | ![The launcher in blue, red, purple and orange](docs/images/launcher-accents.png) |
 
 - **What you have and what is out, at a glance.** At every start the launcher asks GitHub for
   the latest release. An update is one button; the mod's settings, keys and saves stay.
 - **Can you still play with friends?** Under the versions it says whether the new version has
-  the same network protocol: "you can play with friends on 0.13.9" or "everybody must update".
+  the same network protocol: "you can play with friends on the version before" or "everybody
+  must update".
+- **Graphics, sound and keys without starting the game.** The ГРАФИКА (Graphics), ЗВУК (Sound)
+  and УПРАВЛЕНИЕ (Controls) pages: window mode, resolution, wide screen, field of view, quality,
+  frame limit; the volume of music, effects, voices and movies; both players' keys and mouse
+  buttons, ready-made layouts.
+- **Updates itself.** When a newer launcher is out, it takes it at its start and restarts. The
+  mod in the game folder is left alone: updating it is your call.
 - **The download is verified.** The update's file is checked against the SHA-256 given in the
   release; a file with another sum is never run.
 - **Works without GitHub.** Installing and playing need no connection. If GitHub opens only
@@ -113,7 +125,7 @@ More (in Russian): **[docs/LAUNCHER.md](docs/LAUNCHER.md)**.
 | 🖥️ **Widescreen** | Desktop resolution, Hor+, unstretched HUD, full-width menus, borderless mode, MSAA up to 8x. |
 | 🎮 **Controls** | Mouse buttons in the game's own key table, a "two on one keyboard" layout, gamepads for players 3 and 4. |
 | 💾 **Autosave** | After every cleared level, no questions asked. |
-| 🚀 **Launcher** | One file: installs the mod, watches GitHub for new versions, updates with one button, starts the game. |
+| 🚀 **Launcher** | One file: installs the mod, watches GitHub for new versions, updates with one button (and itself with none), sets graphics, sound and keys, starts the game. |
 
 ## What the mod adds and changes
 
@@ -227,7 +239,7 @@ is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [re/notes.md](re/notes.md
 
 ## Status
 
-Under active development, version **0.14.0**. The story has been played by two, three and four
+Under active development, version **0.15.0**. The story has been played by two, three and four
 players over Steam in real sessions; what broke in each was fixed afterwards (see the changelog).
 
 Known limits:

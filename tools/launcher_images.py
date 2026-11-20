@@ -24,6 +24,10 @@ SHOTS = [
     ("downloading", "launcher-download.png", 1),
     ("ready", "launcher-ready.png", 1),
     ("settings", "launcher-settings.png", 1),
+    ("graphics", "launcher-graphics.png", 1),     # the game's settings on the launcher's pages
+    ("sound", "launcher-sound.png", 1),
+    ("controls", "launcher-controls.png", 1),
+    ("selfupdate", "launcher-selfupdate.png", 1),  # at its start: a newer launcher is being taken
 ]
 
 

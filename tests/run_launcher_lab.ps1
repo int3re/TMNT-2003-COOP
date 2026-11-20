@@ -3,7 +3,11 @@
 # written by hand, a wrong checksum, an update through the release's launcher, a launcher that
 # cannot replace itself, waiting for the game to close, a cancelled download, the launcher's own
 # update alone, the uninstall, an install with no server at all, the start a new launcher gets
-# from the old one (/apply).
+# from the old one (/apply); the launcher taking a newer one by itself at its start; the pages of
+# the game's settings (tmntnet.ini, savesetting.dat): changes, defaults, a running game, a game
+# that has not saved its settings yet, the copies Windows keeps of a protected folder's files; the
+# keys' page: a key for an action, the swap with the action that had it, a mouse button, a key the
+# game does not take, the ready layouts and the player's own.
 #
 # No window is shown, the game is never started (its TMNT.EXE here is a copy of the launcher), the
 # user's own launcher settings, cache and game are not touched: everything lives under -Work, and
@@ -35,6 +39,7 @@ if (-not $Port) {  # a port nobody has: other labs on this PC run servers of the
 $base = "http://127.0.0.1:$Port/lab/repo"
 $script:server = $null
 $script:failed = 0
+$closed = $false   # the game folder has a "deny" on it (taken off again in any case)
 
 function Start-Server([string[]]$more) {
   Stop-Server
@@ -53,9 +58,11 @@ function Stop-Server {
 }
 
 # One hidden run of the launcher: presses at their times, a picture at the end. Returns its log's text.
-function Run-Launcher([string]$name, [string[]]$presses, [int]$after, [string[]]$more = @()) {
+# -self: the launcher may take a newer one by itself (off in the runs that press the button for it).
+function Run-Launcher([string]$name, [string[]]$presses, [int]$after, [string[]]$more = @(), [switch]$self) {
   $iniFile = Join-Path $Work "$name.ini"; $log = Join-Path $Work "$name.log"
-  @("[launcher]", "game_dir=$game", "base=$base", "proxy=none", "no_play=1") | Out-File $iniFile -Encoding Unicode
+  $auto = if ($self) { "1" } else { "0" }
+  @("[launcher]", "game_dir=$game", "base=$base", "proxy=none", "no_play=1", "auto_self=$auto") | Out-File $iniFile -Encoding Unicode
   $a = @("/ini", "`"$iniFile`"", "/log", "`"$log`"", "/snap", "`"$(Join-Path $shots "$name.png")`"", "/after", "$after") + $more
   foreach ($p in $presses) { $a += @("/do", $p) }
   $proc = Start-Process $mine -ArgumentList $a -PassThru
@@ -72,13 +79,78 @@ function Mod-Version {
   if (Test-Path $m) { return [regex]::Match((Get-Content $m -TotalCount 1), 'tmntnet ([0-9.]+)').Groups[1].Value } else { return "" }
 }
 
+# A savesetting.dat as the game writes it: version 2, the game's own keys of players 1 and 2 from 4 (then their
+# gamepad buttons and gamepads), sound levels 4 4 4 and stereo at 0x330, a byte sum at 0x3A0.
+function New-Save([string]$file) {
+  $b = New-Object byte[] 932
+  for ($i = 4; $i -lt 0x3A0; $i++) { $b[$i] = [byte](($i * 7) % 251) }
+  $b[0] = 2; $b[1] = 0; $b[2] = 0; $b[3] = 0
+  $keys = @(0x12, 0x13, 0x1D, 0x2A, 0x1F, 0x39, 0x21, 0x20, 0x01, -1, -1, 0x1C, 0xC8, 0xCD, 0xD0, 0xCB,
+            0x4E, 0x4D, 0x49, 0x48, 0x47, 0x52, 0x4B, 0x4C, 0x01, -1, -1, 0x9C, 0xC7, 0xD1, 0xCF, 0xD3,
+            4, 6, 7, 5, 3, 2, 0, 1, -1, -1, -1, -1, -1, -1, -1, -1, 4, 6, 7, 5, 3, 2, 0, 1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 1)
+  for ($k = 0; $k -lt $keys.Count; $k++) { [BitConverter]::GetBytes([int]$keys[$k]).CopyTo($b, 4 + $k * 4) }
+  for ($i = 0x330; $i -lt 0x340; $i++) { $b[$i] = 0 }
+  $b[0x330] = 4; $b[0x334] = 4; $b[0x338] = 4; $b[0x33C] = 1
+  $sum = 0; for ($i = 0; $i -lt 0x3A0; $i++) { $sum = ($sum + $b[$i]) % 256 }
+  $b[0x3A0] = [byte]$sum
+  [IO.File]::WriteAllBytes($file, $b)
+}
+
+# "music effects voices stereo" of a savesetting.dat, or why it is not whole.
+function Read-Sound([string]$file) {
+  $b = [IO.File]::ReadAllBytes($file)
+  if ($b.Length -ne 932) { return "size $($b.Length)" }
+  $sum = 0; for ($i = 0; $i -lt 0x3A0; $i++) { $sum = ($sum + $b[$i]) % 256 }
+  if ($sum -ne $b[0x3A0]) { return "bad sum" }
+  return "$([BitConverter]::ToInt32($b, 0x330)) $([BitConverter]::ToInt32($b, 0x334)) $([BitConverter]::ToInt32($b, 0x338)) $([BitConverter]::ToInt32($b, 0x33C))"
+}
+
+# The bytes of two savesetting.dat that differ, outside the sound levels and the sum.
+function Save-Other-Changes([string]$a, [string]$b) {
+  $x = [IO.File]::ReadAllBytes($a); $y = [IO.File]::ReadAllBytes($b); $n = 0
+  for ($i = 0; $i -lt 932; $i++) { if ($x[$i] -ne $y[$i] -and -not ($i -ge 0x330 -and $i -lt 0x340) -and $i -ne 0x3A0) { $n++ } }
+  return $n
+}
+
+# A player's sixteen keyboard keys of a savesetting.dat, hex (slots: dash, juggle, special, shuriken change,
+# shuriken, jump, attack, strong, pause, -, -, start, up, right, down, left).
+function Read-Keys([string]$file, [int]$player) {
+  $b = [IO.File]::ReadAllBytes($file); $out = @()
+  for ($i = 0; $i -lt 16; $i++) {
+    $v = [BitConverter]::ToInt32($b, 4 + ($player * 16 + $i) * 4)
+    if ($v -lt 0) { $out += "-1" } else { $out += ("{0:X}" -f $v) }
+  }
+  return ($out -join " ")
+}
+
+# The bytes of two savesetting.dat that differ, outside the keyboard keys and the sum.
+function Save-Changes-But-Keys([string]$a, [string]$b) {
+  $x = [IO.File]::ReadAllBytes($a); $y = [IO.File]::ReadAllBytes($b); $n = 0
+  for ($i = 0; $i -lt 932; $i++) { if ($x[$i] -ne $y[$i] -and -not ($i -ge 4 -and $i -lt 0x84) -and $i -ne 0x3A0) { $n++ } }
+  return $n
+}
+
+function Ini-Value([string]$file, [string]$key) {
+  $m = [regex]::Match([IO.File]::ReadAllText($file), "(?m)^$key=([^\s;]*)")
+  if ($m.Success) { return $m.Groups[1].Value } else { return "(none)" }
+}
+
+# The lines of two files that differ, and whether both have as many.
+function Changed-Lines([string]$a, [string]$b) {
+  $latin = [Text.Encoding]::GetEncoding(28591)
+  $x = $latin.GetString([IO.File]::ReadAllBytes($a)) -split "`n"; $y = $latin.GetString([IO.File]::ReadAllBytes($b)) -split "`n"
+  if ($x.Count -ne $y.Count) { return @("(line count $($x.Count) / $($y.Count))") }
+  $out = @(); for ($i = 0; $i -lt $x.Count; $i++) { if ($x[$i] -ne $y[$i]) { $out += $y[$i].Trim() } }
+  return $out
+}
+
 $v = [regex]::Escape($version)
 try {
   "launcher $version, port $Port, work folder $Work"
 
   "1. first install: the installer is inside the launcher"
   Start-Server @("--version", $version)
-  $log = Run-Launcher "01-install" @("primary@2500") 10000
+  $log = Run-Launcher "01-install" @("primary@2500") 20000   # (a new installer's first run is slow: the antivirus reads it)
   Check "the launcher carries its installer" ($log -match "start: launcher $v with its installer")
   Check "the latest release is found" ($log -match "check: latest $v ")
   Check "the block is read: protocol, size, checksum, launcher, two notes" ($log -match "protocol 12 since 0\.13\.8, setup tmntnet-setup\.exe \d{6,} sha [0-9a-f]{64}, launcher tmntnet-launcher\.exe, .*notes 2")
@@ -165,8 +237,149 @@ try {
   $log = Run-Launcher "12b-apply" @() 9000 @("/updated", "/apply")
   Check "it installs what it carries by itself" ($log -match "job: start, bundle" -and $log -match "job: done ok" -and (Mod-Version) -eq $version)
   Check "and asks GitHub afterwards" ($log -match "(?s)job: done ok.*check: latest $v ")
+
+  "13. a newer launcher on GitHub: this one takes it by itself at its start"
+  Start-Server @("--version", "9.9.9")
+  $before = Mod-Version
+  $log = Run-Launcher "13-self" @() 12000 -self
+  Check "no button is pressed: the launcher alone is taken" ($log -match "self: a newer launcher \(9\.9\.9\), taking it" -and $log -match "job: start, the launcher alone" -and $log -notmatch "lab: press")
+  Check "downloaded, checked, put in place" ($log -match "releases/download/v9\.9\.9/tmntnet-launcher\.exe" -and $log -match "job: sha256 matches" -and $log -match "job: the launcher's file replaced")
+  Check "the new one is started; it is not told to install" ($log -match "restart: .* /updated" -and $log -notmatch "/apply")
+  Check "the mod in the game folder is as it was" ((Mod-Version) -eq $before -and $log -notmatch "job: setup")
+  $log = Run-Launcher "13-after" @() 4000 @("/updated") -self
+  Check "the new launcher does not start over" ($log -match "check: latest 9\.9\.9 " -and $log -notmatch "job:" -and $log -notmatch "self:")
+  $log = Run-Launcher "13-off" @() 4000
+  Check "switched off: the launcher waits for the button" ($log -match "check: latest 9\.9\.9 " -and $log -notmatch "job:")
+
+  "14. the newer launcher's checksum is wrong: nothing is replaced, no second try"
+  Start-Server @("--version", "9.9.9", "--bad-sha")
+  $hash = (Get-FileHash $mine).Hash
+  $log = Run-Launcher "14-self-bad-sha" @() 9000 -self
+  Check "the file is refused" ($log -match "the release says 0{64}" -and $log -match "job: done failed" -and $log -notmatch "replaced")
+  Check "once" (([regex]::Matches($log, "job: start")).Count -eq 1)
+  Check "this launcher is as it was" ((Get-FileHash $mine).Hash -eq $hash -and -not (Test-Path "$mine.new") -and -not (Test-Path "$mine.old"))
+
+  "15. the game's settings: the pages write tmntnet.ini and savesetting.dat"
+  Start-Server @("--version", $version)
+  $ini = Join-Path $game "tmntnet.ini"; $save = Join-Path $game "savesetting.dat"
+  $ini0 = Join-Path $Work "tmntnet.ini.first"; $save0 = Join-Path $Work "savesetting.dat.first"
+  New-Save $save
+  Copy-Item $ini $ini0; Copy-Item $save $save0
+  $log = Run-Launcher "15-pages" @("settings@1500", "tab_graphics@1800", "display.next@2100", "wide.switch@2400", "quality.next@2700",
+                                   "fps.next@3000", "sides.next@3300", "fov.prev@3600", "vsync.next@3900", "tab_sound@4300",
+                                   "music.b1@4600", "effects.prev@4900", "voices.next@5200", "stereo.b1@5500", "intro.b1@5800",
+                                   "movies.next@6100") 8000
+  Check "both files are found" ($log -match "page 1: tmntnet\.ini .*game\\tmntnet\.ini, savesetting\.dat .*game\\savesetting\.dat")
+  Check "every press found its control" ($log -notmatch "NOT on the screen" -and $log -notmatch "FAILED")
+  Check "the picture's rows are in tmntnet.ini" ((Ini-Value $ini "display") -eq "windowed" -and (Ini-Value $ini "widescreen") -eq "0" -and
+        (Ini-Value $ini "antialiasing") -eq "8" -and (Ini-Value $ini "anisotropy") -eq "16" -and (Ini-Value $ini "fps_limit") -eq "30" -and
+        (Ini-Value $ini "side_bars") -eq "black" -and (Ini-Value $ini "fullscreen_images") -eq "pillarbox" -and
+        (Ini-Value $ini "fov") -eq "150" -and (Ini-Value $ini "vsync") -eq "on")
+  Check "the movies and the intro too" ((Ini-Value $ini "intro") -eq "skip" -and (Ini-Value $ini "movie_level") -eq "0")
+  $changed = @(Changed-Lines $ini0 $ini)
+  Check "only those lines of tmntnet.ini changed, their comments kept ($($changed.Count))" ($changed.Count -eq 9 -and
+        @($changed | Where-Object { $_ -notmatch "^(display|widescreen|antialiasing|fps_limit|side_bars|fov|vsync|intro|movie_level)=" }).Count -eq 0 -and
+        @($changed | Where-Object { $_ -match "^(widescreen|fov|vsync|intro|fps_limit)=\S+\s+;" }).Count -eq 5)
+  Check "the levels are in savesetting.dat, its sum right: $(Read-Sound $save)" ((Read-Sound $save) -eq "1 3 4 0")
+  Check "nothing else in savesetting.dat changed" ((Save-Other-Changes $save0 $save) -eq 0)
+  Check "the files as they were are kept" ((Get-FileHash (Join-Path $Work "cache\tmntnet.ini.before-launcher")).Hash -eq (Get-FileHash $ini0).Hash -and
+        (Get-FileHash (Join-Path $Work "cache\savesetting.dat.before-launcher")).Hash -eq (Get-FileHash $save0).Hash)
+
+  "16. back to the defaults, a page at a time"
+  $log = Run-Launcher "16-reset" @("settings@1500", "tab_graphics@1800", "reset@2200") 4000
+  Check "the picture is the mod's own again" ((Ini-Value $ini "display") -eq "borderless" -and (Ini-Value $ini "widescreen") -eq "1" -and
+        (Ini-Value $ini "antialiasing") -eq "4" -and (Ini-Value $ini "fps_limit") -eq "0" -and (Ini-Value $ini "side_bars") -eq "blur" -and
+        (Ini-Value $ini "fov") -eq "100" -and (Ini-Value $ini "vsync") -eq "game")
+  Check "the sound is not touched by it" ((Read-Sound $save) -eq "1 3 4 0" -and (Ini-Value $ini "intro") -eq "skip")
+  $log = Run-Launcher "16-reset-sound" @("settings@1500", "tab_sound@1800", "reset@2200") 4000
+  Check "the sound is the game's own again" ((Read-Sound $save) -eq "4 4 4 1" -and (Ini-Value $ini "intro") -eq "play" -and (Ini-Value $ini "movie_level") -eq "-1")
+  Check "tmntnet.ini is the first one again, to the byte" ((Get-FileHash $ini).Hash -eq (Get-FileHash $ini0).Hash)
+  Check "and savesetting.dat" ((Get-FileHash $save).Hash -eq (Get-FileHash $save0).Hash)
+
+  "17. the game is running: its settings are shown, not changed"
+  $fake = Start-Process (Join-Path $game "TMNT.EXE") -ArgumentList @("/ini", "`"$(Join-Path $Work 'game.ini')`"", "/snap", "`"$(Join-Path $Work 'game2.png')`"", "/after", "8000") -PassThru
+  $log = Run-Launcher "17-running" @("settings@1500", "tab_graphics@1800", "display.next@2200", "reset@2500", "tab_sound@2800", "music.b0@3100",
+                                     "tab_controls@3400", "key.jump@3700", "layout.next@4000") 5000
+  $fake.WaitForExit(15000) | Out-Null
+  Check "the page knows" ($log -match "page 1: .*the game is running")
+  Check "no control takes a press" (([regex]::Matches($log, "NOT on the screen")).Count -eq 5 -and $log -notmatch "(?m)^.*\] (set|key:|layout:) ")
+  Check "the files are as they were" ((Get-FileHash $ini).Hash -eq (Get-FileHash $ini0).Hash -and (Get-FileHash $save).Hash -eq (Get-FileHash $save0).Hash)
+
+  "18. the game has not saved its settings yet: no levels, the mod's rows work"
+  Remove-Item $save
+  $log = Run-Launcher "18-no-save" @("settings@1500", "tab_sound@1800", "music.b0@2200", "stereo.b1@2500", "intro.b1@2800",
+                                     "tab_controls@3100", "key.jump@3400") 4500
+  Check "the page says so" ($log -match "page 2: tmntnet\.ini .*, savesetting\.dat none")
+  Check "the levels and the keys take no press, the intro does" (([regex]::Matches($log, "NOT on the screen")).Count -eq 3 -and (Ini-Value $ini "intro") -eq "skip")
+  Check "no savesetting.dat is made" (-not (Test-Path $save))
+  Copy-Item $ini0 $ini -Force
+
+  "19. Windows keeps the game's own copy of tmntnet.ini (VirtualStore): that one is read and written"
+  $store = Join-Path $Work "vstore"; $env:TMNTNET_LAUNCHER_VSTORE = $store
+  $kept = Join-Path $store $game.Substring(3)
+  New-Item -ItemType Directory -Force $kept | Out-Null
+  [IO.File]::WriteAllBytes((Join-Path $kept "tmntnet.ini"), [Text.Encoding]::UTF8.GetBytes(((Get-Content $ini0 -Raw -Encoding UTF8) -replace "(?m)^display=borderless", "display=fullscreen")))
+  $log = Run-Launcher "19-store" @("settings@1500", "tab_graphics@1800", "display.next@2200", "display.next@2500") 4000
+  Check "the copy is the file of the page" ($log -match "page 1: tmntnet\.ini .*vstore.*tmntnet\.ini")
+  Check "full screen -> without a frame -> in a window, in the copy" ((Ini-Value (Join-Path $kept "tmntnet.ini") "display") -eq "windowed")
+  Check "the folder's own file is not touched" ((Get-FileHash $ini).Hash -eq (Get-FileHash $ini0).Hash)
+  Remove-Item $store -Recurse -Force
+
+  "20. the game folder is closed to this user: the change goes where Windows would put the game's own"
+  $closed = $true
+  icacls $game /deny "*S-1-1-0:(OI)(CI)(WD,AD)" | Out-Null
+  $log = Run-Launcher "20-closed" @("settings@1500", "tab_graphics@1800", "quality.next@2200") 4000
+  icacls $game /remove:d "*S-1-1-0" /T | Out-Null; $closed = $false
+  Check "a copy of tmntnet.ini is made, with the change" ((Test-Path (Join-Path $kept "tmntnet.ini")) -and (Ini-Value (Join-Path $kept "tmntnet.ini") "antialiasing") -eq "8" -and $log -notmatch "FAILED")
+  Check "the folder's own file is not touched" ((Get-FileHash $ini).Hash -eq (Get-FileHash $ini0).Hash)
+  Remove-Item $store -Recurse -Force
+
+  "21. closed, and the game keeps its settings there (it runs as an administrator): the launcher says what to do"
+  New-Save $save
+  $closed = $true
+  icacls $game /deny "*S-1-1-0:(OI)(CI)(WD,AD)" | Out-Null
+  $log = Run-Launcher "21-closed-admin" @("settings@1500", "tab_sound@1800", "music.b0@2200", "tab_graphics@2600", "quality.next@3000") 4500
+  icacls $game /remove:d "*S-1-1-0" /T | Out-Null; $closed = $false
+  Check "both changes are refused" (([regex]::Matches($log, "FAILED")).Count -eq 2)
+  Check "nothing is written anywhere" ((Read-Sound $save) -eq "4 4 4 1" -and (Get-FileHash $ini).Hash -eq (Get-FileHash $ini0).Hash -and -not (Test-Path $store))
+  $env:TMNTNET_LAUNCHER_VSTORE = ""
+
+  "22. the keys: a key for an action, the swap, the other player's key, a key the game does not take, a mouse button"
+  New-Save $save; Copy-Item $save $save0 -Force
+  $game1 = "12 13 1D 2A 1F 39 21 20 1 -1 -1 1C C8 CD D0 CB"; $game2 = "4E 4D 49 48 47 52 4B 4C 1 -1 -1 9C C7 D1 CF D3"
+  $log = Run-Launcher "22-keys" @("settings@1500", "tab_controls@1800", "key.attack@2100", "press.24@2400", "key.strong@2700", "press.24@3000",
+                                  "player2@3300", "key.jump@3600", "press.39@3900", "key.dash@4200", "press.1C@4500", "press.01@4800",
+                                  "player1@5100", "key.special@5400", "mouse.1@5700") 7000
+  Check "the page reads the game's keys" ((Read-Keys $save0 0) -eq $game1 -and (Read-Keys $save0 1) -eq $game2 -and $log -match "page 3: ")
+  Check "every press found its control" ($log -notmatch "NOT on the screen" -and $log -notmatch "FAILED" -and $log -notmatch "no cell waits")
+  Check "J for the weak attack, then for the strong one: the weak takes the strong's D" ($log -match "key: player 1 attack = J" -and $log -match "key: player 1 strong = J")
+  Check "Enter is refused, Esc ends the wait" ($log -match "is not taken by the game's table" -and $log -match "the wait is over")
+  Check "player 1: $(Read-Keys $save 0)" ((Read-Keys $save 0) -eq "12 13 F1 2A 1F 52 20 24 1 -1 -1 1C C8 CD D0 CB")
+  Check "player 2 (the space bar; player 1's jump took Num 0): $(Read-Keys $save 1)" ((Read-Keys $save 1) -eq "4E 4D 49 48 47 39 4B 4C 1 -1 -1 9C C7 D1 CF D3")
+  Check "the file's sum is right, the levels and the rest are untouched" ((Read-Sound $save) -eq "4 4 4 1" -and (Save-Changes-But-Keys $save0 $save) -eq 0)
+  $own1 = Read-Keys $save 0; $own2 = Read-Keys $save 1
+
+  "23. the ready layouts; the player's own keys are kept and come back"
+  $log = Run-Launcher "23a-game" @("settings@1500", "tab_controls@1800", "layout.next@2200") 3500
+  Check "own -> the game's" ($log -match "layout: the game's" -and (Read-Keys $save 0) -eq $game1 -and (Read-Keys $save 1) -eq $game2)
+  Check "the own keys are kept in tmntnet.ini" ((Ini-Value $ini "custom_keys_1") -eq "0x12,0x13,0xF1,0x2A,0x1F,0x52,0x20,0x24,0x01,-1,-1,0x1C,0xC8,0xCD,0xD0,0xCB" -and
+        (Ini-Value $ini "custom_keys_2") -eq "0x4E,0x4D,0x49,0x48,0x47,0x39,0x4B,0x4C,0x01,-1,-1,0x9C,0xC7,0xD1,0xCF,0xD3")
+  $log = Run-Launcher "23b-two" @("settings@1500", "tab_controls@1800", "layout.next@2200") 3500
+  Check "the game's -> two players at one keyboard" ($log -match "layout: two players" -and (Read-Keys $save 0) -eq "16 17 18 23 26 39 24 25 1 -1 -1 1C 11 20 1F 1E" -and
+        (Read-Keys $save 1) -eq "4F 50 48 51 4D 52 4B 4C 1 -1 -1 9C C8 CD D0 CB")
+  $log = Run-Launcher "23c-own" @("settings@1500", "tab_controls@1800", "layout.next@2200") 3500
+  Check "two players -> own: the keys of before" ($log -match "layout: own" -and (Read-Keys $save 0) -eq $own1 -and (Read-Keys $save 1) -eq $own2)
+  $log = Run-Launcher "23d-reset" @("settings@1500", "tab_controls@1800", "reset@2200") 3500
+  Check "the defaults are the game's keys" ($log -match "reset keys" -and (Read-Keys $save 0) -eq $game1 -and (Read-Keys $save 1) -eq $game2)
+  Check "the file is the first one again, to the byte" ((Get-FileHash $save).Hash -eq (Get-FileHash $save0).Hash)
+  Copy-Item $ini0 $ini -Force
+  $log = Run-Launcher "23e-no-own" @("settings@1500", "tab_controls@1800", "layout.next@2200", "layout.next@2600") 4000
+  Check "with no keys of one's own the row has two values" ($log -match "(?s)layout: two players.*layout: the game's" -and $log -notmatch "layout: own" -and (Read-Keys $save 0) -eq $game1)
 }
-finally { Stop-Server }
+finally {
+  Stop-Server
+  if ($closed) { icacls $game /remove:d "*S-1-1-0" /T | Out-Null }
+}
 ""
 if ($script:failed) { "FAILED: $($script:failed)"; exit 1 }
 "ALL OK (pictures of every run: $shots)"

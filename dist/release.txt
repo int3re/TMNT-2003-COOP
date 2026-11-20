@@ -3,10 +3,10 @@
 # tools/release_notes.py puts these lines into the release's page on GitHub.
 # Written anew for every release: a title, up to four short notes (a line or two each on
 # the sheet), and the first version that has this release's network protocol.
-version=0.14.0
+version=0.15.0
 protocol=12
 protocol_since=0.13.8
-title=Лаунчер: мод ставится и обновляется сам
-note=Новый tmntnet-launcher.exe: находит игру, ставит мод без интернета и запускает игру.
-note=Проверяет на GitHub последнюю версию и обновляется одной кнопкой, со сверкой SHA-256.
-note=Сама игра по сети не менялась: протокол 12, с 0.13.8 и 0.13.9 играть можно.
+title=Графика, звук и клавиши — прямо в лаунчере
+note=В настройках лаунчера вкладки «Графика», «Звук» и «Управление»: те же строки и клавиши, что в меню игры.
+note=Лаунчер сам обновляет себя при запуске, когда на GitHub вышла версия новее.
+note=Сама игра по сети не менялась: протокол 12, с 0.13.8, 0.13.9 и 0.14.0 играть можно.

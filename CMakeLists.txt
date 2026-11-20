@@ -310,6 +310,11 @@ add_executable(tmntnet_launcher WIN32
   src/launcher/gfx.cpp
   src/launcher/net.cpp
   src/launcher/update.cpp
+  src/launcher/game_settings.cpp
+  # tmntnet.ini as the mod reads and writes it (the pages of the game's settings)
+  src/common/config.cpp
+  src/common/keynames.cpp
+  src/common/log.cpp
   src/launcher/launcher.manifest
   ${CMAKE_BINARY_DIR}/launcher.rc)
 target_include_directories(tmntnet_launcher PRIVATE src)

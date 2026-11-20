@@ -7,16 +7,25 @@
 //     by SHA-256), which replaces this file, starts and installs what it
 //     carries; where this file cannot be replaced, the release's installer is
 //     downloaded and run instead;
+//   - at its start takes a newer launcher by itself (Обновлять лаунчер при
+//     запуске), leaving the mod in the game folder as it is;
+//   - shows the game's picture and sound settings (game_settings.h) on two
+//     pages of its settings;
 //   - starts the game.
 // Its settings: %APPDATA%\tmntnet\launcher.ini.
 //
 // Lab (no window on the screen, nothing of the user's touched):
 //   /ini <file>                 another settings file ([launcher] base=..., no_play=1)
 //   /shot <png> /state <name>   a canned state's picture (update, install, downloading, ready,
-//                               nogame, offline, settings, error, checking, bundle, ...);
+//                               nogame, offline, settings, graphics, sound, controls, controls-key,
+//                               selfupdate, updated, error, checking, bundle, ...);
 //                               /scale <n>, /accent <0..3>, /was <the version before, in the picture>
 //   /snap <png> /after <ms>     runs hidden, saves the live state's picture after <ms>, exits
-//   /do <what>@<ms>             presses a control then (primary, secondary, cancel, settings, ...)
+//   /do <what>@<ms>             presses a control then (primary, secondary, cancel, settings,
+//                               tab_graphics, tab_sound, tab_controls, reset, self, a row's part:
+//                               display.next, wide.switch, music.b2, stereo.b1; the keys: player2,
+//                               layout.next, key.jump (its cell), then press.1E (a key by its
+//                               DirectInput code, hex) or mouse.1 (a mouse button), ...)
 //   /at <x>,<y>                 shows the window there, without taking the keyboard
 //   /log <file>                 what happened, line by line
 //   /fonts                      the fonts found, into the log
@@ -39,6 +48,7 @@
 
 #include "common/game_dir.h"
 #include "common/version.h"
+#include "launcher/game_settings.h"
 #include "launcher/gfx.h"
 #include "launcher/net.h"
 #include "launcher/resource.h"
@@ -52,7 +62,7 @@ const wchar_t* kClass = L"tmntnet-launcher";
 const wchar_t* kTitle = L"TMNT 2003 Co-op";
 
 constexpr UINT kCheckDone = WM_APP + 1, kJobDone = WM_APP + 2;
-constexpr UINT_PTR kJobTimer = 1, kDisarmTimer = 2, kCloseTimer = 3, kLabTimer = 4;
+constexpr UINT_PTR kJobTimer = 1, kDisarmTimer = 2, kCloseTimer = 3, kLabTimer = 4, kBusyTimer = 5;
 
 enum class Check { NotAsked, Asking, Known, Failed };
 enum class Job { None, Download, Verify, WaitGame, Install };
@@ -66,6 +76,7 @@ struct Settings {
   std::wstring file;
   std::wstring game_dir;
   bool check_at_start = true, auto_install = false;
+  bool auto_self = true;  // a newer launcher found at the start is taken without a question
   net::Proxy proxy;
   int accent = 3;
   std::wstring base = kDefaultBase;
@@ -80,9 +91,17 @@ struct Model {
   net::Failure check_failure;
   std::wstring checked_at;  // 18:42
   Job job = Job::None;
+  Kind job_kind = Kind::Bundle;
   bool job_uninstall = false, job_self = false;
   std::wstring error, error_host;  // a job that failed, until the next action
   bool settings_open = false;
+  int tab = 0;              // the settings' page: 0 the launcher's own, 1 ГРАФИКА, 2 ЗВУК, 3 УПРАВЛЕНИЕ
+  int keys_player = 0;      // УПРАВЛЕНИЕ: whose keys are shown
+  int capture = -1;         // the action whose cell waits for a key, or -1
+  std::wstring capture_note;  // why the key just pressed was not taken
+  bool game_busy = false;   // the game is running: its settings are not to be changed under it
+  bool self_tried = false;  // the launcher's own update was started once in this run
+  bool just_updated = false;  // started by the launcher before it (/updated)
   bool launching = false;
   bool uninstall_armed = false;
   float flow = 0.0f;
@@ -159,6 +178,7 @@ void load_settings() {
   m.set.game_dir = ini_get(L"game_dir", L"");
   m.set.check_at_start = ini_get(L"check_at_start", L"1") != L"0";
   m.set.auto_install = ini_get(L"auto_install", L"0") == L"1";
+  m.set.auto_self = ini_get(L"auto_self", L"1") != L"0";
   const std::wstring proxy = ini_get(L"proxy", L"system");
   m.set.proxy.mode = proxy == L"none" ? net::Proxy::None : proxy == L"own" ? net::Proxy::Own : net::Proxy::System;
   m.set.proxy.address = ini_get(L"proxy_address", L"");
@@ -279,6 +299,100 @@ void offline_sheet(view::View& v, const std::wstring& host) {
   g_paper_url = m.set.base + L"/releases/latest";
 }
 
+// ГРАФИКА and ЗВУК: the rows of the game's settings, and the line under them.
+void fill_page(view::View& v, bool game) {
+  const bool sound = m.tab == 2;
+  auto add = [&](view::Group& to, gset::Row r) {
+    view::Row row;
+    row.number = r;
+    row.label = gset::label(r);
+    row.usable = game && !m.game_busy && gset::usable(r);
+    const int now = gset::value(r);
+    switch (gset::kind(r)) {
+      case gset::Kind::Choice:
+        row.kind = view::RowKind::Choice;
+        row.value = gset::name(r, now);
+        break;
+      case gset::Kind::Switch:
+        row.kind = view::RowKind::Switch;
+        row.on = now == 1;
+        break;
+      case gset::Kind::Level:
+        row.kind = view::RowKind::Level;
+        row.level = now;
+        break;
+      case gset::Kind::Pair:
+        row.kind = view::RowKind::Pair;
+        row.options[0] = gset::name(r, 0);
+        row.options[1] = gset::name(r, 1);
+        row.chosen = now;
+        break;
+    }
+    to.rows.push_back(row);
+  };
+  if (!sound) {
+    v.groups[0].name = L"ЭКРАН";
+    for (gset::Row r : {gset::kDisplay, gset::kResolution, gset::kWide, gset::kSides, gset::kBackground}) add(v.groups[0], r);
+    v.groups[1].name = L"КАРТИНКА";
+    for (gset::Row r : {gset::kFov, gset::kHud, gset::kQuality, gset::kFpsLimit, gset::kVsync}) add(v.groups[1], r);
+  } else {
+    v.groups[0].name = L"ГРОМКОСТЬ";
+    for (gset::Row r : {gset::kMusic, gset::kEffects, gset::kVoices, gset::kMovies}) add(v.groups[0], r);
+    v.groups[1].name = L"ЗВУЧАНИЕ";
+    for (gset::Row r : {gset::kStereo, gset::kIntro}) add(v.groups[1], r);
+    v.groups[1].note = L"В оригинале заставка гремит громче всей игры. С модом ролики звучат как музыка, пока им не задана "
+                       L"своя громкость.";
+  }
+  for (const view::Group& g : v.groups)
+    for (const view::Row& row : g.rows) v.can_reset = v.can_reset || row.usable;
+  v.page_warn = true;
+  if (!game) v.page_note = L"Игра не найдена: укажите её папку на вкладке ЛАУНЧЕР.";
+  else if (m.game_busy) v.page_note = L"Игра запущена: закройте её, чтобы менять настройки отсюда.";
+  else if (!gset::error().empty()) v.page_note = gset::error();
+  else if (!sound && !gset::has_mod()) v.page_note = L"Мод не установлен: настройки графики появятся после его установки.";
+  else if (sound && !gset::has_levels())
+    v.page_note = L"Игра ещё не сохраняла свои настройки: громкость можно будет менять после её первого запуска.";
+  else if (sound && !gset::has_mod()) v.page_note = L"Мод не установлен: «Ролики» и «Заставка» появятся после его установки.";
+  else {
+    v.page_warn = false;
+    v.page_note = sound ? L"Громкость — та же, что в игре: ПАРАМЕТРЫ → ОПЦИИ ЗВУКА. Действует со следующего запуска игры."
+                        : L"Настройки мода из tmntnet.ini — те же строки, что в игре: ПАРАМЕТРЫ → ПАРАМЕТРЫ ГРАФИКИ. "
+                          L"Действуют со следующего запуска игры.";
+  }
+}
+
+// УПРАВЛЕНИЕ: the keys of one player, the ready layout, the line under them.
+void fill_controls(view::View& v, bool game) {
+  const bool usable = game && !m.game_busy && gset::has_keys();
+  v.keys_usable = usable;
+  v.keys_player = m.keys_player;
+  for (int a = 0; a < gset::kKeyActions; ++a) {
+    v.keys[a].label = gset::action_label(a);
+    v.keys[a].key = gset::has_keys() ? gset::key_text(m.keys_player, a) : std::wstring(L"—");
+    v.keys[a].waiting = usable && m.capture == a;
+  }
+  static const wchar_t* kLayouts[3] = {L"Как в игре", L"Два игрока", L"Своя"};
+  v.layout = gset::has_keys() ? kLayouts[gset::layout()] : L"—";
+  v.can_reset = usable && gset::layout() != 0;
+  v.page_warn = true;
+  if (!game) v.page_note = L"Игра не найдена: укажите её папку на вкладке ЛАУНЧЕР.";
+  else if (m.game_busy) v.page_note = L"Игра запущена: закройте её, чтобы менять настройки отсюда.";
+  else if (!gset::error().empty()) v.page_note = gset::error();
+  else if (!gset::has_keys())
+    v.page_note = L"Игра ещё не сохраняла свои настройки: клавиши можно будет менять после её первого запуска.";
+  else if (m.capture >= 0) {
+    v.page_warn = false;
+    v.page_bright = true;
+    v.page_note = !m.capture_note.empty() ? m.capture_note
+                  : gset::has_mod() ? L"Нажмите клавишу — или щёлкните по этой же ячейке кнопкой мыши, чтобы поставить её. Esc — отмена."
+                                    : L"Нажмите клавишу. Esc — отмена.";
+  } else {
+    v.page_warn = false;
+    v.page_note = L"Клавиши игроков 1 и 2 — те же, что в игре: ПАРАМЕТРЫ УПРАВЛЕНИЯ → КЛАВИАТУРА. По сети каждый играет "
+                  L"клавишами игрока 1. Кнопки геймпада настраиваются в игре.";
+  }
+}
+
 view::View make_view() {
   using view::Icon;
   using view::Mark;
@@ -295,7 +409,9 @@ view::View make_view() {
   g_paper_url = m.set.base + L"/releases";
 
   // The bottom line.
-  if (m.job != Job::None) v.net = m.job == Job::Download ? L"GitHub: идёт загрузка" : L"Установка";
+  const bool self_only = m.job_kind == Kind::SelfOnly;
+  if (m.job != Job::None)
+    v.net = m.job == Job::Download ? L"GitHub: идёт загрузка" : self_only ? L"Обновление лаунчера" : m.job_uninstall ? L"Удаление" : L"Установка";
   else if (m.check == Check::Asking) v.net = L"GitHub: проверяю";
   else if (known) v.net = L"GitHub: проверено в " + m.checked_at;
   else if (m.check == Check::Failed) v.net = L"GitHub: нет ответа", v.net_color = 0xEF5A5A;
@@ -304,6 +420,10 @@ view::View make_view() {
   // Settings.
   v.check_at_start = m.set.check_at_start;
   v.auto_install = m.set.auto_install;
+  v.auto_self = m.set.auto_self;
+  v.tab = m.tab;
+  if (m.settings_open && m.tab == 3) fill_controls(v, game);
+  else if (m.settings_open && m.tab != 0) fill_page(v, game);
   v.proxy = (int)m.set.proxy.mode;
   v.proxy_address = m.set.proxy.address;
   v.draw_address = !(g_edit && IsWindowVisible(g_edit));
@@ -333,7 +453,8 @@ view::View make_view() {
   if (m.job != Job::None) {
     v.job = true;
     const int stage = m.job == Job::Download ? 0 : m.job == Job::Verify ? 1 : 2;
-    const wchar_t* names[3] = {L"Загрузка", L"Проверка SHA-256", m.job_uninstall ? L"Удаление" : L"Установка"};
+    const wchar_t* names[3] = {L"Загрузка", L"Проверка SHA-256",
+                               m.job_uninstall ? L"Удаление" : self_only ? L"Перезапуск" : L"Установка"};
     for (int i = 0; i < 3; ++i) {
       v.steps[i].label = names[i];
       v.steps[i].state = i < stage ? 2 : i == stage ? 1 : 0;
@@ -348,6 +469,11 @@ view::View make_view() {
     v.source = repo_text() + (known ? L" · " + m.latest.tag : L"");
     v.flow = m.flow;
     v.can_cancel = m.job == Job::Download || m.job == Job::WaitGame;
+    if (self_only)
+      v.job_note = L"На GitHub вышла версия " + (known ? m.latest.version : std::wstring(L"новее")) +
+                   L": лаунчер обновляет себя и перезапустится сам. Мод в папке игры при этом не меняется.";
+    else if (m.job_uninstall) v.job_note = L"Игра остаётся такой, какой была до мода. Сохранения не трогаются.";
+    else v.job_note = L"Перед установкой лаунчер попросит закрыть игру. Настройки, клавиши и сохранения остаются.";
     return v;
   }
 
@@ -379,7 +505,10 @@ view::View make_view() {
   const bool says_protocol = told && about.protocol > 0 && !about.protocol_since.empty();
   const bool same_protocol = says_protocol && have && update::compare(m.installed, about.protocol_since) >= 0;
   v.installed_note = !have ? L"мод не установлен" : same_protocol ? L"протокол " + std::to_wstring(about.protocol) : L"в папке игры";
-  const std::wstring play_hint = L"Игра по сети — пункт СЕТЕВАЯ ИГРА в главном меню игры.";
+  // (the first picture of a launcher that has just replaced the one before it says so)
+  const std::wstring fresh = m.just_updated ? L"Лаунчер обновился до " + own_version() + L". " : L"";
+  const std::wstring play_hint = fresh + L"Игра по сети — пункт СЕТЕВАЯ ИГРА в главном меню игры. Графика, звук и клавиши — в "
+                                         L"настройках лаунчера, значок вверху справа.";
   // What GitHub is known to have.
   v.latest_label = L"НА GITHUB";
   if (known) {
@@ -413,7 +542,7 @@ view::View make_view() {
           g_paper_url = m.set.base + L"/releases";
         }
       }
-      v.hint = L"Установщик этой версии внутри лаунчера: скачивать ничего не нужно.";
+      v.hint = fresh + L"Установщик этой версии внутри лаунчера: скачивать ничего не нужно.";
     } else if (o.source == Source::Launcher) {
       v.hint = m.latest.launcher + (m.latest.launcher_size ? L" · " + megabytes(m.latest.launcher_size) + L" МБ" : L"") +
                L" · после загрузки сверяется SHA-256";
@@ -704,11 +833,13 @@ void start_job(Kind kind) {
   g_got = 0;
   g_total = kind == Kind::Setup ? p.release.setup_size : download ? p.release.launcher_size : 0;
   m.job = (Job)g_stage.load();
+  m.job_kind = kind;
   m.job_uninstall = kind == Kind::Uninstall;
   m.job_self = false;
   m.error.clear();
   m.error_host.clear();
   m.settings_open = false;
+  KillTimer(g_hwnd, kBusyTimer);
   static const wchar_t* kNames[] = {L"bundle", L"setup", L"via the launcher", L"the launcher alone", L"uninstall"};
   lab(std::wstring(L"job: start, ") + kNames[(int)kind]);
   SetTimer(g_hwnd, kJobTimer, 50, nullptr);
@@ -805,6 +936,107 @@ void open_log() {
 }
 
 void sync_edit();
+int hit_at(float x, float y);
+
+bool game_running_now() { return m.fake_game < 0 && game_ok() && update::game_running(m.set.game_dir); }
+
+// A page of the settings comes up: the game's own settings are read again
+// (the game may have written them since).
+void open_tab(int tab) {
+  m.tab = tab;
+  m.capture = -1;
+  m.capture_note.clear();
+  KillTimer(g_hwnd, kBusyTimer);
+  if (tab == 0 || m.fake_game >= 0) return;
+  gset::load(game_ok() ? m.set.game_dir : std::wstring());
+  m.game_busy = game_running_now();
+  SetTimer(g_hwnd, kBusyTimer, 1500, nullptr);
+  lab(L"page " + std::to_wstring(tab) + L": tmntnet.ini " + (gset::has_mod() ? gset::ini_file() : std::wstring(L"none")) +
+      L", savesetting.dat " + (gset::has_levels() ? gset::levels_file() : std::wstring(L"none")) +
+      (m.game_busy ? L", the game is running" : L""));
+}
+
+// A control of a row of the game's settings.
+void change_row(int number, int part) {
+  if (number < 0 || number >= gset::kRows || !m.settings_open || (m.tab != 1 && m.tab != 2) || m.game_busy) return;
+  const gset::Row r = (gset::Row)number;
+  if ((r >= gset::kFirstSound) != (m.tab == 2) || !gset::usable(r)) return;
+  const int now = gset::value(r);
+  int next = now;
+  switch (gset::kind(r)) {
+    case gset::Kind::Choice: next = now + (part == view::kPartNext ? 1 : part == view::kPartPrev ? -1 : 0); break;
+    case gset::Kind::Switch: next = 1 - now; break;
+    case gset::Kind::Level:
+      next = part == view::kPartPrev ? now - 1 : part == view::kPartNext ? now + 1 : part - view::kPartPiece;
+      next = next < 0 ? 0 : next > 4 ? 4 : next;
+      break;
+    case gset::Kind::Pair: next = part == view::kPartPiece + 1 ? 1 : 0; break;
+  }
+  if (next == now) return;
+  const bool ok = gset::set(r, next);
+  lab(L"set " + update::widen(gset::key(r)) + L" = " + gset::name(r, gset::value(r)) + (ok ? L"" : L" FAILED: " + gset::error()));
+}
+
+// УПРАВЛЕНИЕ is open and its keys may be changed.
+bool keys_live() { return m.settings_open && m.tab == 3 && !m.game_busy && game_ok() && gset::has_keys(); }
+
+// The ready layouts, a step at a time: the game's, two players, the player's own (when there is one).
+void step_layout(int step) {
+  if (!keys_live()) return;
+  const int now = gset::layout();
+  int next = (now + step + 3) % 3;
+  if (next == 2 && now != 2 && !gset::has_own_layout()) next = (next + step + 3) % 3;
+  if (next == now) return;
+  const bool ok = gset::set_layout(next);
+  static const wchar_t* kNames[3] = {L"the game's", L"two players", L"own"};
+  lab(std::wstring(L"layout: ") + kNames[gset::layout()] + (ok ? L"" : L" FAILED: " + gset::error()));
+}
+
+// A key (a DirectInput code; a mouse button: gset::kMouseKey + n) while a cell of the keys waits for one.
+void capture_key(int code) {
+  if (m.capture < 0 || !keys_live()) return;
+  if (code == 0x01) {  // Esc
+    m.capture = -1;
+    m.capture_note.clear();
+    lab(L"key: the wait is over, nothing changed");
+  } else if (!gset::key_allowed(code)) {
+    m.capture_note = L"Клавишу «" + gset::key_name(code) + L"» игра в таблицу не берёт: нажмите другую. Esc — отмена.";
+    lab(L"key: " + gset::key_name(code) + L" is not taken by the game's table");
+  } else {
+    const int action = m.capture;
+    m.capture = -1;
+    m.capture_note.clear();
+    const bool ok = gset::set_key(m.keys_player, action, code);
+    lab(L"key: player " + std::to_wstring(m.keys_player + 1) + L" " + update::widen(gset::action_key(action)) + L" = " +
+        gset::key_name(gset::key_code(m.keys_player, action)) + (ok ? L"" : L" FAILED: " + gset::error()));
+  }
+  repaint();
+}
+
+// The key of a WM_KEYDOWN as DirectInput names it: the scan code, +0x80 for an extended key.
+int dik_of(WPARAM vk, LPARAM lp) {
+  if (vk == VK_ESCAPE) return 0x01;
+  if (vk == VK_NUMLOCK) return 0x45;  // (the two that the message and DirectInput tell apart the other way round)
+  if (vk == VK_PAUSE) return 0xC5;
+  int scan = (int)((lp >> 16) & 0xFF);
+  if (!scan) scan = (int)MapVirtualKeyW((UINT)vk, MAPVK_VK_TO_VSC) & 0xFF;
+  return scan ? (scan | ((lp >> 24) & 1 ? 0x80 : 0)) : 0;
+}
+
+// A mouse button pressed while a cell waits: on that very cell it becomes the cell's key.
+bool capture_mouse(int button, LPARAM lp) {
+  if (m.capture < 0) return false;
+  const bool on_cell = hit_at(GET_X_LPARAM(lp) / g_scale, GET_Y_LPARAM(lp) / g_scale) == view::kKey0 + m.capture;
+  if (on_cell && gset::key_allowed(gset::kMouseKey + button)) {
+    capture_key(gset::kMouseKey + button);
+    return true;
+  }
+  if (button != 0 && on_cell) return true;  // (no mod: no mouse buttons in the table; the wait goes on)
+  m.capture = -1;  // a press elsewhere: the wait is over, the press goes its usual way
+  m.capture_note.clear();
+  repaint();
+  return false;
+}
 
 void perform(Action a) {
   switch (a) {
@@ -829,11 +1061,41 @@ void act(int id) {
     m.uninstall_armed = false;
     KillTimer(g_hwnd, kDisarmTimer);
   }
+  if (m.capture >= 0) {  // (anything else pressed: the cell stops waiting)
+    m.capture = -1;
+    m.capture_note.clear();
+  }
   switch (id) {
     case kSettings:
       if (m.job == Job::None) m.settings_open = !m.settings_open;
+      if (m.settings_open) open_tab(m.tab);
+      else KillTimer(g_hwnd, kBusyTimer);
       break;
-    case kBack: m.settings_open = false; break;
+    case kBack:
+      m.settings_open = false;
+      KillTimer(g_hwnd, kBusyTimer);
+      break;
+    case kTab0: case kTab1: case kTab2: case kTab3:
+      if (m.settings_open) open_tab(id - kTab0);
+      break;
+    case kPlayer1: case kPlayer2:
+      if (m.settings_open && m.tab == 3) m.keys_player = id - kPlayer1;
+      break;
+    case kLayoutPrev: step_layout(-1); break;
+    case kLayoutNext: step_layout(1); break;
+    case kSwitchSelf:
+      m.set.auto_self = !m.set.auto_self;
+      ini_set(L"auto_self", m.set.auto_self ? L"1" : L"0");
+      break;
+    case kReset:
+      if (keys_live()) {  // the game's own keys (the player's own are kept for СВОЯ)
+        const bool ok = gset::set_layout(0);
+        lab(std::wstring(L"reset keys") + (ok ? L"" : L" FAILED: " + gset::error()));
+      } else if (m.settings_open && (m.tab == 1 || m.tab == 2) && !m.game_busy) {
+        const bool ok = gset::reset(m.tab == 2);
+        lab(std::wstring(L"reset ") + (m.tab == 2 ? L"sound" : L"graphics") + (ok ? L"" : L" FAILED: " + gset::error()));
+      }
+      break;
     case kMinimize: ShowWindow(g_hwnd, SW_MINIMIZE); break;
     case kClose: PostMessageW(g_hwnd, WM_CLOSE, 0, 0); break;
     case kPrimary: perform(g_primary); break;
@@ -872,7 +1134,13 @@ void act(int id) {
       m.set.accent = id - kSwatch0;
       ini_set(L"accent", std::to_wstring(m.set.accent));
       break;
-    default: break;
+    default:
+      if (id >= kKey0 && id <= kKeyLast) {
+        if (keys_live()) m.capture = id - kKey0;
+      } else if (id >= kRowFirst) {
+        change_row((id - kRowFirst) / kRowParts, (id - kRowFirst) % kRowParts);
+      }
+      break;
   }
   sync_edit();
   repaint();
@@ -1005,8 +1273,20 @@ void on_check_done(CheckResult* r) {
         std::to_wstring(m.latest.notes.size()) + L", date " + m.latest.date);
     for (const std::wstring& n : m.latest.notes) lab(L"check: note \"" + n + L"\"");
     if (m.set.auto_install && game_ok() && !m.installed.empty() && offer().on && m.job == Job::None &&
-        !update::game_running(m.set.game_dir))
+        !update::game_running(m.set.game_dir)) {
       perform(Action::Update);
+    } else if (m.set.auto_self && !m.self_tried && newer_self() && m.job == Job::None && !m.settings_open) {
+      // A newer launcher: this one takes it and hands over to it, once a run. The
+      // mod in the game folder stays; the new launcher offers what it carries.
+      m.self_tried = true;
+      const std::wstring self = self_path();
+      if (update::can_write(self.substr(0, self.find_last_of(L'\\')))) {
+        lab(L"self: a newer launcher (" + m.latest.version + L"), taking it");
+        start_job(Kind::SelfOnly);
+      } else {
+        lab(L"self: a newer launcher (" + m.latest.version + L"), but this one's folder cannot be written to");
+      }
+    }
   } else {
     m.check = Check::Failed;
     m.check_failure = r->why;
@@ -1109,6 +1389,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
       break;
     case WM_LBUTTONDOWN:
       SetFocus(hwnd);
+      if (capture_mouse(0, lp)) return 0;
       g_down = hit_at(GET_X_LPARAM(lp) / g_scale, GET_Y_LPARAM(lp) / g_scale);
       g_focus = 0;
       if (g_down) SetCapture(hwnd);
@@ -1122,7 +1403,26 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
       repaint();
       return 0;
     }
+    case WM_RBUTTONDOWN:
+      if (capture_mouse(1, lp)) return 0;
+      break;
+    case WM_MBUTTONDOWN:
+      if (capture_mouse(2, lp)) return 0;
+      break;
+    case WM_XBUTTONDOWN:
+      if (capture_mouse(HIWORD(wp) == XBUTTON2 ? 4 : 3, lp)) return TRUE;
+      break;
+    case WM_SYSCOMMAND:
+      if ((wp & 0xFFF0) == SC_KEYMENU) return 0;  // (no menu here: Alt is a key like any other)
+      break;
+    case WM_SYSKEYDOWN:
+      if (m.capture < 0) break;
+      [[fallthrough]];
     case WM_KEYDOWN:
+      if (m.capture >= 0) {  // a cell of the keys waits: this key is its key
+        if (!(lp & (1 << 30))) capture_key(dik_of(wp, lp));
+        return 0;
+      }
       if (wp == VK_TAB) move_focus(GetKeyState(VK_SHIFT) < 0);
       else if ((wp == VK_RETURN || wp == VK_SPACE) && g_focus) act(g_focus);
       else if (wp == VK_ESCAPE && m.settings_open) act(view::kBack);
@@ -1152,6 +1452,13 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
       } else if (wp == kCloseTimer) {
         KillTimer(hwnd, kCloseTimer);
         DestroyWindow(hwnd);
+      } else if (wp == kBusyTimer) {  // a page of the game's settings is open
+        const bool busy = game_running_now();
+        if (busy != m.game_busy) {
+          m.game_busy = busy;
+          if (!busy) gset::load(m.set.game_dir);  // (the game wrote its settings on its way out)
+          repaint();
+        }
       }
       return 0;
     case kCheckDone: on_check_done(reinterpret_cast<CheckResult*>(lp)); return 0;
@@ -1257,6 +1564,22 @@ void canned(const std::wstring& state, std::wstring was) {
     m.check = Check::NotAsked;
   } else if (state == L"checking") m.check = Check::Asking;
   else if (state == L"settings") m.settings_open = true;
+  else if (state == L"graphics" || state == L"sound" || state == L"controls" || state == L"controls-key") {
+    m.settings_open = true;
+    m.tab = state == L"sound" ? 2 : state == L"graphics" ? 1 : 3;
+    gset::load_canned();
+    if (state == L"controls-key") m.capture = 5;  // (the weak attack's cell waits for a key)
+  } else if (state == L"selfupdate") {  // at its start: a newer launcher is being taken
+    m.installed = was;
+    m.job = Job::Download;
+    m.job_kind = Kind::SelfOnly;
+    g_total = r.launcher_size;
+    g_got = r.launcher_size / 100 * 62;
+    m.flow = 7.0f;
+  } else if (state == L"updated") {  // the new launcher's first picture
+    m.fake_own = r.version;
+    m.just_updated = true;
+  }
   else if (state == L"settings-own") {
     m.settings_open = true;
     m.set.proxy.mode = net::Proxy::Own;
@@ -1305,9 +1628,28 @@ int control_of(const std::wstring& name) {
                 {L"auto", view::kSwitchAuto}, {L"proxy_none", view::kProxyNone}, {L"proxy_system", view::kProxySystem},
                 {L"proxy_own", view::kProxyOwn}, {L"uninstall", view::kUninstall}, {L"log", view::kOpenLog},
                 {L"swatch0", view::kSwatch0}, {L"swatch1", view::kSwatch1}, {L"swatch2", view::kSwatch2},
-                {L"swatch3", view::kSwatch3}, {L"paper", view::kPaperLink}, {L"repo", view::kRepoLink}};
+                {L"swatch3", view::kSwatch3}, {L"paper", view::kPaperLink}, {L"repo", view::kRepoLink},
+                {L"tab_launcher", view::kTab0}, {L"tab_graphics", view::kTab1}, {L"tab_sound", view::kTab2},
+                {L"tab_controls", view::kTab3}, {L"self", view::kSwitchSelf}, {L"reset", view::kReset},
+                {L"player1", view::kPlayer1}, {L"player2", view::kPlayer2}, {L"layout.prev", view::kLayoutPrev},
+                {L"layout.next", view::kLayoutNext}};
   for (auto& n : kNames)
     if (name == n.name) return n.id;
+  if (name.compare(0, 4, L"key.") == 0) {  // an action's cell on УПРАВЛЕНИЕ: key.jump
+    for (int a = 0; a < gset::kKeyActions; ++a)
+      if (name.substr(4) == update::widen(gset::action_key(a))) return view::kKey0 + a;
+    return 0;
+  }
+  // A part of a row of the game's settings: display.next, wide.switch, music.b2.
+  const size_t dot = name.find(L'.');
+  if (dot == std::wstring::npos) return 0;
+  const std::wstring row = name.substr(0, dot), part = name.substr(dot + 1);
+  for (int r = 0; r < gset::kRows; ++r) {
+    if (row != update::widen(gset::key((gset::Row)r))) continue;
+    const int p = part == L"prev" ? view::kPartPrev : part == L"next" ? view::kPartNext : part == L"switch" ? view::kPartSwitch :
+                  part.size() == 2 && part[0] == L'b' ? view::kPartPiece + (part[1] - L'0') : -1;
+    return p < 0 ? 0 : view::kRowFirst + r * view::kRowParts + p;
+  }
   return 0;
 }
 
@@ -1322,6 +1664,13 @@ void CALLBACK lab_tick(HWND, UINT, UINT_PTR, DWORD) {
       lab(std::wstring(L"snap: ") + (ok ? L"saved " : L"NOT saved ") + g_snap_file);
       DestroyWindow(g_hwnd);
       return;
+    }
+    // A key or a mouse button for the cell that waits: press.1E, mouse.1.
+    if (step.what.compare(0, 6, L"press.") == 0 || step.what.compare(0, 6, L"mouse.") == 0) {
+      const int n = (int)wcstol(step.what.c_str() + 6, nullptr, 16);
+      lab(L"lab: " + step.what + (m.capture >= 0 ? L"" : L" — no cell waits"));
+      capture_key(step.what[0] == L'm' ? gset::kMouseKey + n : n);
+      continue;
     }
     // A press goes the way a click does: only a control that is on the screen now takes it.
     std::vector<view::Hit> hits;
@@ -1364,6 +1713,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     else if (a == L"/after" && more) snap_after = (DWORD)_wtoi(argv[++i]);
     else if (a == L"/fonts") fonts = true;
     else if (a == L"/apply") apply = true;
+    else if (a == L"/updated") m.just_updated = m.self_tried = true;  // (and no second update in a row)
     else if (a == L"/at" && more) {
       const std::wstring s = argv[++i];
       size_t comma = s.find(L',');

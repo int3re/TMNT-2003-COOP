@@ -19,7 +19,16 @@ enum Id {
   kProxyNone, kProxySystem, kProxyOwn, kProxyEdit,
   kPickSettings, kOpenLog, kUninstall,
   kSwatch0, kSwatch1, kSwatch2, kSwatch3,
+  kTab0, kTab1, kTab2, kTab3,  // the settings' pages: the launcher's own, the picture, the sound, the keys
+  kSwitchSelf, kReset,
+  kPlayer1, kPlayer2,          // УПРАВЛЕНИЕ: whose keys are shown
+  kLayoutPrev, kLayoutNext,    //             the ready layouts
+  kKey0, kKeyLast = kKey0 + 11,  //           the twelve actions' keys
+  // The game's settings: a row's controls are kRowFirst + its number * kRowParts + a part.
+  kRowFirst = 100,
 };
+constexpr int kRowParts = 16;
+enum RowPart { kPartPrev = 0, kPartNext = 1, kPartSwitch = 2, kPartPiece = 3 };  // kPartPiece + i: a level's block, a pair's button
 
 enum class Icon { None, Download, Play, Folder, Retry };
 enum class Mark { None, Ok, Warn, Bad, Busy };  // the line under the versions
@@ -27,6 +36,28 @@ enum class Mark { None, Ok, Warn, Bad, Busy };  // the line under the versions
 struct Step {
   std::wstring label;
   int state = 0;  // 0 to do, 1 now, 2 done
+};
+
+// A row of the game's settings (the ГРАФИКА and ЗВУК pages).
+enum class RowKind { Choice, Switch, Level, Pair };  // a value between two arrows; on / off; five blocks; two buttons
+struct Row {
+  int number = 0;  // (its controls' ids)
+  RowKind kind = RowKind::Choice;
+  std::wstring label, value;          // Choice: the value's words
+  bool on = false;                    // Switch
+  int level = 0;                      // Level: 0..4
+  std::wstring options[2];            // Pair
+  int chosen = 0;
+  bool usable = true;                 // false: drawn pale, takes no clicks
+};
+struct Group {
+  std::wstring name, note;
+  std::vector<Row> rows;
+};
+// An action of the game's key table and its key (the УПРАВЛЕНИЕ page).
+struct KeyCell {
+  std::wstring label, key;
+  bool waiting = false;  // the next key pressed becomes its key
 };
 
 struct View {
@@ -71,8 +102,22 @@ struct View {
   uint32_t net_color = 0x8BE836;
   std::wstring repo;  // github.com/owner/name
 
-  // Settings.
-  bool check_at_start = true, auto_install = false;
+  // A job's last line: what it will do and what it will not touch.
+  std::wstring job_note;
+
+  // Settings: the page shown, and the game's settings on pages 1 and 2.
+  int tab = 0;
+  Group groups[2];
+  std::wstring page_note;   // under the groups
+  bool page_warn = false;   // the note says why nothing can be changed
+  bool page_bright = false; // the note says what to do now (a key is waited for)
+  bool can_reset = false;
+  // Page 3: the keyboard keys of one player at a time.
+  int keys_player = 0;
+  KeyCell keys[12];         // a column at a time: moving, fighting, the rest
+  std::wstring layout;      // the ready layout's name
+  bool keys_usable = false;
+  bool check_at_start = true, auto_install = false, auto_self = true;
   int proxy = 1;  // 0 none, 1 Windows', 2 own
   std::wstring proxy_address;
   bool draw_address = true;  // false: an edit box of the window covers the field

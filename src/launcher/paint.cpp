@@ -18,7 +18,7 @@ using gfx::Type;
 
 constexpr uint32_t kInk = 0x07100A, kPaper = 0xEEF3E2, kMuted = 0x9DB0A2, kSoft = 0xC9D6C4, kGreen = 0x8BE836,
                    kDeep = 0x1E5A2C, kPanel = 0x0F1B16, kLine = 0x2A4136, kEdge = 0x4A6B59, kBar = 0x050908,
-                   kBlack = 0x000000, kBad = 0xFF8A8A, kSheetInk = 0x0B1210;
+                   kBlack = 0x000000, kBad = 0xFF8A8A, kSheetInk = 0x0B1210, kFaint = 0x6F8578;
 constexpr float kMainBottom = 556.0f;  // where the bottom line starts
 constexpr float kLean = -7.0f;         // the lettering's and the buttons' slant, degrees
 constexpr float kLeft = 40.0f, kColumn = 540.0f;  // the left column
@@ -47,6 +47,10 @@ constexpr const char* kIconBack = "M20 12H5M11 6L5 12L11 18";
 constexpr const char* kIconOut = "M13 5H19V11M19 5L10 14M10 7H5V19H17V14";
 constexpr const char* kIconClose = "M6 6L18 18M18 6L6 18";
 constexpr const char* kIconMinimize = "M6 17H18";
+constexpr const char* kIconPrev = "M14 6L8 12L14 18";
+constexpr const char* kIconNext = "M10 6L16 12L10 18";
+constexpr const char* kIconMinus = "M6 12H18";
+constexpr const char* kIconPlus = "M6 12H18M12 6V18";
 
 void icon(Canvas& c, const char* d, float x, float y, float size, uint32_t rgb, float pen = 2.2f, bool solid = false) {
   c.path(d, x, y, size / 24.0f, solid, rgb, pen, rgb);
@@ -371,8 +375,7 @@ float job(Canvas& c, const View& v, std::vector<Hit>& hits, float y) {
   note.wrap = true;
   note.line = 1.45f;
   note.valign = 0;
-  c.text(L"Перед установкой лаунчер попросит закрыть игру. Настройки, клавиши и сохранения остаются.",
-         D2D1::RectF(kLeft, y, kLeft + kColumn, y + 40), note, kMuted);
+  c.text(v.job_note, D2D1::RectF(kLeft, y, kLeft + kColumn, y + 40), note, kMuted);
   return y + 36;
 }
 
@@ -521,7 +524,7 @@ void hero(Canvas& c, const View& v, std::vector<Hit>& hits) {
 
 // --- settings ---------------------------------------------------------------------
 
-D2D1_RECT_F group(Canvas& c, const View& v, float x, float y, float w, float h, const wchar_t* name) {
+D2D1_RECT_F group(Canvas& c, const View& v, float x, float y, float w, float h, const std::wstring& name) {
   const D2D1_RECT_F r = rect(x, y, w, h);
   c.fill(r, kPanel);
   c.frame(r, kLine, 2.0f);
@@ -529,34 +532,262 @@ D2D1_RECT_F group(Canvas& c, const View& v, float x, float y, float w, float h, 
   return D2D1::RectF(x + 18, y + 16 + 16, x + w - 18, y + h - 18);
 }
 
-void toggle(Canvas& c, const View& v, std::vector<Hit>& hits, int id, const D2D1_RECT_F& row, const wchar_t* label, bool on) {
-  c.text(label, D2D1::RectF(row.left, row.top, row.right - 64, row.bottom), type(Face::Text, 14), kPaper);
+void toggle(Canvas& c, const View& v, std::vector<Hit>& hits, int id, const D2D1_RECT_F& row, const std::wstring& label, bool on,
+            bool usable = true) {
+  c.text(label, D2D1::RectF(row.left, row.top, row.right - 64, row.bottom), type(Face::Text, 14), usable ? kPaper : kFaint);
   const D2D1_RECT_F hit = D2D1::RectF(row.right - 56, row.top, row.right, row.bottom);
-  const float ty = (row.top + row.bottom) * 0.5f - 13;
+  const float ty = (row.top + row.bottom) * 0.5f - 13, alpha = usable ? 1.0f : 0.45f;
   const D2D1_RECT_F track = rect(hit.left + 2, ty, 52, 26);
   const Touch s = touch(v, id);
-  c.fill(track, on ? kGreen : 0x1A2B23);
-  c.frame(track, on ? kBlack : (s.hover ? kPaper : kEdge), 2.0f);
+  c.fill(track, on ? kGreen : 0x1A2B23, alpha);
+  c.frame(track, on ? kBlack : (s.hover && usable ? kPaper : kEdge), 2.0f, alpha);
   const D2D1_RECT_F knob = rect(track.left + (on ? 30 : 4), ty + 4, 18, 18);
-  c.fill(knob, kPaper);
-  c.frame(knob, kBlack, 2.0f);
+  c.fill(knob, kPaper, alpha);
+  c.frame(knob, kBlack, 2.0f, alpha);
+  if (!usable) return;
   if (s.focus) focus_ring(c, track);
   hits.push_back({id, hit});
 }
 
-void settings(Canvas& c, const View& v, std::vector<Hit>& hits) {
-  // Back, and the page's name.
-  float y = 68;
-  const float bw = line_button(c, v, hits, kBack, kLeft, y, 0, 44, L"Назад", false, kPaper, kEdge, kIconBack, kPanel, true);
-  {
-    const float x = kLeft + bw + 18;
-    const D2D1_MATRIX_3X2_F lean = c.push(gfx::skew_x(kLean, x, y + 44));
-    const Type t = type(Face::Display, 30);
-    c.text(L"НАСТРОЙКИ", D2D1::RectF(x + 3, y + 3, x + 500, y + 47), t, kDeep);
-    c.text(L"НАСТРОЙКИ", D2D1::RectF(x, y, x + 500, y + 44), t, kPaper);
-    c.pop(lean);
+// The settings' pages: leaning tabs at the right of the page's name.
+void tabs(Canvas& c, const View& v, std::vector<Hit>& hits, float y) {
+  constexpr int kTabs = 4;
+  static const wchar_t* kNames[kTabs] = {L"ЛАУНЧЕР", L"ГРАФИКА", L"ЗВУК", L"УПРАВЛЕНИЕ"};
+  Type t = type(Face::Display, 12, 400, 0.06f);
+  float widths[kTabs], total = 0.0f;
+  for (int i = 0; i < kTabs; ++i) {
+    widths[i] = 14 + c.measure(kNames[i], t).width + 14;
+    total += widths[i] + (i ? 10.0f : 0.0f);
   }
-  y += 44 + 16;
+  t.align = 1;
+  float x = kWidth - kLeft - 6 - total;
+  for (int i = 0; i < kTabs; ++i) {
+    const bool on = v.tab == i;
+    const D2D1_RECT_F r = rect(x, y, widths[i], 44);
+    const Touch s = touch(v, kTab0 + i);
+    const D2D1_MATRIX_3X2_F lean = c.push(gfx::skew_x(kLean, x + widths[i] * 0.5f, y + 22));
+    if (on) {
+      c.fill(rect(x + 4, y + 4, widths[i], 44), kDeep);
+      c.fill(r, v.accent);
+      c.frame(r, kBlack, 3.0f);
+    } else {
+      if (s.down) c.fill(r, 0xFFFFFF, 0.10f);
+      else if (s.hover) c.fill(r, 0xFFFFFF, 0.05f);
+      c.frame(r, s.hover || s.down ? kPaper : kEdge, 2.0f);
+    }
+    c.text(kNames[i], r, t, on ? kSheetInk : kPaper);
+    c.pop(lean);
+    if (s.focus) focus_ring(c, r);
+    hits.push_back({kTab0 + i, r});
+    x += widths[i] + 10;
+  }
+}
+
+int part_id(const Row& row, int part) { return kRowFirst + row.number * kRowParts + part; }
+
+void page_foot(Canvas& c, const View& v, std::vector<Hit>& hits, float y);
+
+// A value between two arrows, like a row of the game's own options: 220 wide, its right edge at `right`.
+void arrows_box(Canvas& c, const View& v, std::vector<Hit>& hits, float right, float top, const std::wstring& value,
+                bool usable, int id_prev, int id_next) {
+  const D2D1_RECT_F box = rect(right - 220, top, 220, 44);
+  const uint32_t ink = usable ? kPaper : kFaint;
+  c.fill(box, 0x0A1310);
+  c.frame(box, usable ? kEdge : kLine, 2.0f);
+  for (int i = 0; i < 2; ++i) {
+    const int id = i ? id_next : id_prev;
+    const D2D1_RECT_F a = rect(i ? box.right - 44 : box.left, box.top, 44, 44);
+    const Touch s = touch(v, id);
+    if (usable && (s.hover || s.down))
+      c.fill(D2D1::RectF(a.left + 2, a.top + 2, a.right - 2, a.bottom - 2), 0xFFFFFF, s.down ? 0.14f : 0.07f);
+    c.fill(rect(i ? a.left : a.right - 2, box.top + 2, 2, 40), kLine);
+    icon(c, i ? kIconNext : kIconPrev, a.left + 13, a.top + 13, 18, usable && (s.hover || s.down) ? kGreen : ink, 2.8f);
+    if (!usable) continue;
+    if (s.focus) focus_ring(c, a);
+    hits.push_back({id, a});
+  }
+  Type t = type(Face::Text, 13, 700);
+  t.align = 1;
+  t.ellipsis = true;
+  c.text(value, D2D1::RectF(box.left + 46, box.top, box.right - 46, box.bottom), t, ink);
+}
+
+void choice(Canvas& c, const View& v, std::vector<Hit>& hits, const Row& row, const D2D1_RECT_F& r) {
+  arrows_box(c, v, hits, r.right, r.top, row.value, row.usable, part_id(row, kPartPrev), part_id(row, kPartNext));
+}
+
+// How loud: five blocks between "quieter" and "louder".
+void level(Canvas& c, const View& v, std::vector<Hit>& hits, const Row& row, const D2D1_RECT_F& r) {
+  const float w = 44 + 12 + 5 * 28 + 4 * 6 + 12 + 44;
+  const uint32_t ink = row.usable ? kPaper : kFaint;
+  auto button = [&](int part, float x, const char* d) {
+    const D2D1_RECT_F b = rect(x, r.top, 44, 44);
+    const Touch s = touch(v, part_id(row, part));
+    if (row.usable && (s.hover || s.down)) c.fill(b, 0xFFFFFF, s.down ? 0.12f : 0.06f);
+    c.frame(b, !row.usable ? kLine : s.hover || s.down ? kPaper : kEdge, 2.0f);
+    icon(c, d, x + 13, r.top + 13, 18, row.usable && (s.hover || s.down) ? kGreen : ink, 2.8f);
+    if (!row.usable) return;
+    if (s.focus) focus_ring(c, b);
+    hits.push_back({part_id(row, part), b});
+  };
+  button(kPartPrev, r.right - w, kIconMinus);
+  float x = r.right - w + 44 + 12;
+  for (int i = 0; i < 5; ++i) {
+    const D2D1_RECT_F block = rect(x, r.top + 11, 28, 22);
+    const bool full = i <= row.level;
+    const Touch s = touch(v, part_id(row, kPartPiece + i));
+    const D2D1_MATRIX_3X2_F lean = c.push(gfx::skew_x(-12.0f, x + 14, r.top + 22));
+    c.fill(block, full ? (row.usable ? kGreen : 0x4F6B3C) : 0x1A2B23);
+    if (row.usable && (s.hover || s.down)) c.fill(block, 0xFFFFFF, 0.20f);
+    c.frame(block, full ? kBlack : row.usable ? kEdge : kLine, 2.0f);
+    c.pop(lean);
+    if (row.usable) {
+      if (s.focus) focus_ring(c, block);
+      hits.push_back({part_id(row, kPartPiece + i), rect(x - 3, r.top, 34, 44)});
+    }
+    x += 28 + 6;
+  }
+  button(kPartNext, r.right - 44, kIconPlus);
+}
+
+// One of two.
+void pair(Canvas& c, const View& v, std::vector<Hit>& hits, const Row& row, const D2D1_RECT_F& r) {
+  const float w = 240, half = (w - 8) / 2;
+  for (int i = 0; i < 2; ++i) {
+    const bool on = row.chosen == i;
+    const D2D1_RECT_F b = rect(r.right - w + i * (half + 8), r.top, half, 44);
+    if (row.usable) {
+      line_button(c, v, hits, part_id(row, kPartPiece + i), b.left, b.top, half, 44, row.options[i], false, on ? kInk : kPaper,
+                  on ? kBlack : kEdge, nullptr, kGreen, on);
+    } else {
+      c.frame(b, kLine, 2.0f);
+      Type t = type(Face::Text, 13, 700);
+      t.align = 1;
+      c.text(row.options[i], b, t, kFaint);
+    }
+  }
+}
+
+// ГРАФИКА, ЗВУК: the game's settings in two groups; under them what they are
+// (or why they cannot be changed now) and the way back to the defaults.
+void game_page(Canvas& c, const View& v, std::vector<Hit>& hits, float y) {
+  const float w = (kWidth - 80 - 28) / 2;
+  size_t most = 1;
+  for (const Group& g : v.groups) most = std::max(most, g.rows.size());
+  const float h = 32 + 8 + most * 44.0f + (most - 1) * 6.0f + 18;
+  for (int i = 0; i < 2; ++i) {
+    const Group& g = v.groups[i];
+    const D2D1_RECT_F in = group(c, v, kLeft + i * (w + 28), y, w, h, g.name);
+    float gy = in.top + 8;
+    for (const Row& row : g.rows) {
+      const D2D1_RECT_F r = D2D1::RectF(in.left, gy, in.right, gy + 44);
+      if (row.kind == RowKind::Switch) {
+        toggle(c, v, hits, part_id(row, kPartSwitch), r, row.label, row.on, row.usable);
+      } else {
+        Type label = type(Face::Text, 14);
+        label.ellipsis = true;
+        c.text(row.label, D2D1::RectF(r.left, r.top, r.right - 226, r.bottom), label, row.usable ? kPaper : kFaint);
+        if (row.kind == RowKind::Choice) choice(c, v, hits, row, r);
+        else if (row.kind == RowKind::Level) level(c, v, hits, row, r);
+        else pair(c, v, hits, row, r);
+      }
+      gy += 44 + 6;
+    }
+    if (!g.note.empty()) {
+      Type note = type(Face::Text, 12);
+      note.wrap = true;
+      note.line = 1.45f;
+      note.valign = 0;
+      c.text(g.note, D2D1::RectF(in.left, gy + 4, in.right, in.bottom), note, kMuted);
+    }
+  }
+  page_foot(c, v, hits, y + h + 14);
+}
+
+// УПРАВЛЕНИЕ: whose keys, the ready layouts, and the twelve actions with their
+// keys in three columns (moving, fighting, the rest). A key's cell, pressed,
+// waits for the next key.
+void controls_page(Canvas& c, const View& v, std::vector<Hit>& hits, float y) {
+  const float h = 32 + 8 + 44 + 16 + 4 * 44 + 3 * 6 + 18;
+  const D2D1_RECT_F in = group(c, v, kLeft, y, kWidth - 80, h, L"КЛАВИАТУРА И МЫШЬ");
+  const bool usable = v.keys_usable;
+  float gy = in.top + 8;
+  for (int i = 0; i < 2; ++i) {
+    const bool on = v.keys_player == i;
+    const std::wstring name = i ? L"Игрок 2" : L"Игрок 1";
+    const D2D1_RECT_F b = rect(in.left + i * (116 + 8), gy, 116, 44);
+    if (usable) {
+      line_button(c, v, hits, kPlayer1 + i, b.left, b.top, 116, 44, name, false, on ? kInk : kPaper, on ? kBlack : kEdge, nullptr,
+                  kGreen, on);
+    } else {
+      c.frame(b, kLine, 2.0f);
+      Type t = type(Face::Text, 13, 700);
+      t.align = 1;
+      c.text(name, b, t, kFaint);
+    }
+  }
+  {
+    Type label = type(Face::Text, 14);
+    label.align = 2;
+    c.text(L"Раскладка", D2D1::RectF(in.right - 220 - 14 - 160, gy, in.right - 220 - 14, gy + 44), label, usable ? kPaper : kFaint);
+    arrows_box(c, v, hits, in.right, gy, v.layout, usable, kLayoutPrev, kLayoutNext);
+  }
+  gy += 44 + 7;
+  c.fill(rect(in.left, gy, in.right - in.left, 2), kLine);
+  gy += 2 + 7;
+  const float gap = 28, column = (in.right - in.left - 2 * gap) / 3;
+  for (int a = 0; a < 12; ++a) {
+    const KeyCell& cell = v.keys[a];
+    const float x = in.left + (a / 4) * (column + gap), cy = gy + (a % 4) * (44 + 6);
+    Type label = type(Face::Text, 14);
+    label.ellipsis = true;
+    c.text(cell.label, D2D1::RectF(x, cy, x + column - 128 - 10, cy + 44), label, usable ? kPaper : kFaint);
+    const D2D1_RECT_F chip = rect(x + column - 128, cy, 128, 44);
+    const Touch s = touch(v, kKey0 + a);
+    c.fill(chip, cell.waiting ? 0x12261B : 0x0A1310);
+    if (usable && !cell.waiting && (s.hover || s.down)) c.fill(chip, 0xFFFFFF, s.down ? 0.12f : 0.06f);
+    c.frame(chip, cell.waiting ? v.accent : !usable ? kLine : s.hover || s.down ? kPaper : kEdge, 2.0f);
+    Type key = type(Face::Mono, 12, 700);
+    key.align = 1;
+    key.ellipsis = true;
+    c.text(cell.waiting ? L"нажмите…" : cell.key, D2D1::RectF(chip.left + 6, chip.top, chip.right - 6, chip.bottom), key,
+           cell.waiting ? v.accent : usable ? kPaper : kFaint);
+    if (!usable) continue;
+    if (s.focus) focus_ring(c, chip);
+    hits.push_back({kKey0 + a, chip});
+  }
+  page_foot(c, v, hits, y + h + 14);
+}
+
+// Under a page's groups: what these settings are, why they cannot be changed
+// now or what is waited for; the way back to the defaults.
+void page_foot(Canvas& c, const View& v, std::vector<Hit>& hits, float y) {
+  const std::wstring reset = L"По умолчанию";
+  const float right = kWidth - kLeft, bw = 44 + c.measure(reset, type(Face::Text, 13, 700)).width;
+  if (v.can_reset) {
+    line_button(c, v, hits, kReset, right - bw, y, bw, 44, reset, false, kPaper, kEdge, nullptr, kPanel, true);
+  } else {
+    const D2D1_RECT_F r = rect(right - bw, y, bw, 44);
+    c.fill(r, kPanel);
+    c.frame(r, kLine, 2.0f);
+    Type t = type(Face::Text, 13, 700);
+    t.align = 1;
+    c.text(reset, r, t, kFaint);
+  }
+  if (v.page_warn) {
+    icon(c, kIconWarn, kLeft, y + 13, 18, v.accent, 2.4f);
+  } else {  // an "i" in a ring
+    c.rt->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(kLeft + 9, y + 22), 6.75f, 6.75f), c.brush(kMuted), 1.65f);
+    c.path("M12 11V16.5M12 7.4V7.8", kLeft, y + 13, 0.75f, false, 0, 2.2f, kMuted);
+  }
+  Type note = type(Face::Text, 12);
+  note.wrap = true;
+  note.line = 1.45f;
+  c.text(v.page_note, D2D1::RectF(kLeft + 28, y, right - bw - 24, y + 44), note, v.page_warn || v.page_bright ? kSoft : kMuted);
+}
+
+// ЛАУНЧЕР: its own settings.
+void launcher_page(Canvas& c, const View& v, std::vector<Hit>& hits, float y) {
   const float w = (kWidth - 80 - 28) / 2, x2 = kLeft + w + 28, h1 = 196, h2 = 154;
   const Type tiny = type(Face::Text, 12);
 
@@ -566,13 +797,10 @@ void settings(Canvas& c, const View& v, std::vector<Hit>& hits) {
     float gy = in.top + 6;
     toggle(c, v, hits, kSwitchCheck, D2D1::RectF(in.left, gy, in.right, gy + 44), L"Проверять при запуске", v.check_at_start);
     gy += 44 + 4;
-    toggle(c, v, hits, kSwitchAuto, D2D1::RectF(in.left, gy, in.right, gy + 44), L"Ставить обновления без вопроса",
+    toggle(c, v, hits, kSwitchSelf, D2D1::RectF(in.left, gy, in.right, gy + 44), L"Обновлять лаунчер при запуске", v.auto_self);
+    gy += 44 + 4;
+    toggle(c, v, hits, kSwitchAuto, D2D1::RectF(in.left, gy, in.right, gy + 44), L"Ставить обновления мода без вопроса",
            v.auto_install);
-    gy += 44 + 8;
-    c.text(L"Источник — последний релиз:", D2D1::RectF(in.left, gy, in.right, gy + 16), tiny, kMuted);
-    Type repo = type(Face::Mono, 12, 500);
-    repo.ellipsis = true;
-    c.text(v.repo, D2D1::RectF(in.left, gy + 18, in.right, gy + 34), repo, kSoft);
   }
   // The network.
   {
@@ -599,7 +827,7 @@ void settings(Canvas& c, const View& v, std::vector<Hit>& hits) {
       t.ellipsis = true;
       const bool empty = v.proxy_address.empty();
       c.text(empty ? L"адрес:порт" : v.proxy_address, D2D1::RectF(field.left + 12, field.top, field.right - 12, field.bottom), t,
-             empty || !own ? 0x6F8578 : kPaper);
+             empty || !own ? kFaint : kPaper);
     }
     if (own) hits.push_back({kProxyEdit, field});
   }
@@ -619,7 +847,7 @@ void settings(Canvas& c, const View& v, std::vector<Hit>& hits) {
       c.frame(r, kLine, 2.0f);
       Type t = type(Face::Text, 13, 700);
       t.align = 1;
-      c.text(v.uninstall_label, r, t, 0x6F8578);
+      c.text(v.uninstall_label, r, t, kFaint);
     }
   }
   // The look.
@@ -642,6 +870,25 @@ void settings(Canvas& c, const View& v, std::vector<Hit>& hits) {
       x += 44 + 18;
     }
   }
+}
+
+void settings(Canvas& c, const View& v, std::vector<Hit>& hits) {
+  // Back, the page's name, its tabs.
+  float y = 68;
+  const float bw = line_button(c, v, hits, kBack, kLeft, y, 0, 44, L"Назад", false, kPaper, kEdge, kIconBack, kPanel, true);
+  {
+    const float x = kLeft + bw + 18;
+    const D2D1_MATRIX_3X2_F lean = c.push(gfx::skew_x(kLean, x, y + 44));
+    const Type t = type(Face::Display, 30);
+    c.text(L"НАСТРОЙКИ", D2D1::RectF(x + 3, y + 3, x + 500, y + 47), t, kDeep);
+    c.text(L"НАСТРОЙКИ", D2D1::RectF(x, y, x + 500, y + 44), t, kPaper);
+    c.pop(lean);
+  }
+  tabs(c, v, hits, y);
+  y += 44 + 16;
+  if (v.tab == 0) launcher_page(c, v, hits, y);
+  else if (v.tab == 3) controls_page(c, v, hits, y);
+  else game_page(c, v, hits, y);
 }
 
 // --- the bottom line ----------------------------------------------------------------
