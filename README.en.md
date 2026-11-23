@@ -61,6 +61,7 @@ The same kind of mod for other games: [TMNT 2: Battle Nexus](https://github.com/
 - [Building from source](#building-from-source)
 - [How it works](#how-it-works)
 - [Contributing and bug reports](#contributing-and-bug-reports)
+- [Say thanks](#say-thanks)
 - [Credits and legal](#credits-and-legal)
 
 ## Quick start
@@ -448,6 +449,22 @@ Bug reports and suggestions go to [Issues](../../issues). Attach `tmntnet.log` (
 `tmntnet-logs` folder) **from every PC** that took part: without the other side's logs a network
 bug usually cannot be found. The log opens from the launcher: settings → «Открыть журнал» (Open
 the log). How the code is laid out and how to check changes: [CONTRIBUTING.en.md](CONTRIBUTING.en.md).
+
+## Say thanks
+
+The mod is free and open. If it was of use to you and you want to say thanks, you can send USDT
+to one of these addresses; entirely optional.
+
+| Network | Address for USDT |
+|---|---|
+| TRON (TRC20) | `TVdy7i7qoF1ZdrnNSZaC5Mgz1ZddaMhw4y` |
+| The Open Network (TON) | `UQB-oxQVLLN3hm-YRGfr5-XJ95P0zIAeLFstgG40HiaR8oMz` |
+| BNB Smart Chain (BEP20) | `0xA11f8221952FA5f540bC528072213b14F124379B` |
+
+Send only USDT and only over the network named next to the address: another coin or another
+network will not arrive. On BNB Smart Chain the minimum is 0.1 USDT; the USDT contract on that
+network is
+[`0x55d398326f99059fF775485246999027B3197955`](https://bscscan.com/token/0x55d398326f99059fF775485246999027B3197955).
 
 ## Credits and legal
 
