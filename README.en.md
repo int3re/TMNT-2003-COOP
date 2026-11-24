@@ -13,7 +13,7 @@ One file · everyone has their own copy of the game, their own screen and their 
 One file, about 7.7 MB: the mod's installer is inside the launcher. It installs the mod, updates it and itself, sets up the game and starts it.
 
 [![version](https://img.shields.io/github/v/release/int3re/TMNT-2003-COOP?label=version&color=2ea44f)](../../releases/latest)
-![protocol](https://img.shields.io/badge/net_protocol-12-blue)
+![protocol](https://img.shields.io/badge/net_protocol-13-blue)
 ![platform](https://img.shields.io/badge/Windows-10%20%2F%2011-0078d6?logo=windows)
 ![players](https://img.shields.io/badge/players-1%E2%80%934-orange)
 ![network](https://img.shields.io/badge/network-Steam%20%C2%B7%20LAN%20%C2%B7%20IP-1b2838?logo=steam)
@@ -43,7 +43,8 @@ keys can also be set before the game starts, in the [launcher](#the-launcher).
 > English gloss. The whole documentation is available in English: **[docs/en](docs/en/README.md)**.
 
 The same kind of mod for other games: [TMNT 2: Battle Nexus](https://github.com/int3re/TMNT-2-BATTLE-NEXUS-COOP),
-[The Incredibles: Rise of the Underminer](https://github.com/int3re/INCREDIBLES-RISE-OF-THE-UNDERMINER-COOP).
+[The Incredibles: Rise of the Underminer](https://github.com/int3re/INCREDIBLES-RISE-OF-THE-UNDERMINER-COOP),
+[TMNT Mutant Melee](https://github.com/int3re/TMNT-MUTANT-MELEE-COOP).
 
 ## Contents
 
@@ -243,6 +244,9 @@ the mod added; everything else is the game's own. (The interface is Russian.)
 - **all six costumes** of every turtle are unlocked from the start and picked on the character
   select screen;
 - **the dojo is played by the whole team**, not by player 1's turtle alone;
+- **rewards and progress go to the whole team**: the jump attack and the attack power from the
+  dojo, the "story cleared" mark and the levels opened go to every turtle that played the level; a
+  team of four opens the last boss, Oroku Saki, in one playthrough (the original needs four);
 - **autosave** after every cleared level, no questions.
 
 <br clear="right">
@@ -361,6 +365,7 @@ next to the version.
 
 | Mod versions | Protocol | Play together |
 |---|---|---|
+| 0.16.0 | 13 | only with 0.16.0 |
 | 0.13.8 – 0.15.1 | 12 | yes |
 | 0.13.6 – 0.13.7 | 11 | yes |
 | 0.13.5 | 10 | only with 0.13.5 |

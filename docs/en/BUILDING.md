@@ -147,6 +147,12 @@ Keys of the `[debug]` section in `tmntnet.ini`:
 | `shots=menu:ms,csel:ms,press_XX:ms,…` | frame shots and presses by time from the main menu or the select screen |
 | `stage=N` | on the level map, start level N |
 | `stage_over_at=frame` | at this frame the level counts as completed (the game's native flag): moving on to the next one without playing it through |
+| `dojo_pass_at=frame` | at this frame the dojo counts as passed (the game's own routine): its prize and all that follows |
+| `team_progress=0` | a level's rewards go to the first player's turtle alone, as before 0.16.0 (to compare) |
+| `ending_guard=0` | an ending scene that is ended before its own end leaves its tasks, as before 0.16.0 (to repeat the crash at closing the window during the staff roll) |
+| `hidden=1` | the game's window is not shown at all: not on the screen, not in the taskbar, never in front; the game's message boxes go to the log |
+| `quit_after=seconds` | the game closes itself that many seconds after its start (a hidden window has no close button) |
+| `draw_every=N` | one frame of N reaches the video card (the game's drawing code runs as ever, the game is the same); a screenshot waits for such a frame |
 | `session_seed=N` | the host starts the session with this seed (to repeat a run) |
 | `camera_trace=1` | twice a second — the camera and the players' positions into the log |
 | `level_dump=1` | the game's statics at the start and at the end of a level — into files (what a level leaves behind) |

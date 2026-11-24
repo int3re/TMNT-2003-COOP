@@ -148,7 +148,7 @@ Useful lines:
 
 | Line | What it means |
 |---|---|
-| `tmntnet 0.15.1 (protocol v12)` | the version of the mod and of the protocol |
+| `tmntnet 0.16.0 (protocol v13)` | the version of the mod and of the protocol |
 | `lockstep: frame …, waited … ; 598 frames in 10000 ms; for player 2 … ms` | once every 10 seconds: how many frames were played (600 is full speed) and how long each player's buttons were waited for. The player who was waited for longer — that PC or the connection to it is what slows the game down |
 | `signature … : 0 matches` | the mod did not find a place in the game's code (another `TMNT.EXE`) |
 | `Steam ready`, `Steam lobby … created` | Steam is connected, the lobby is created |

@@ -27,6 +27,7 @@
 #include "mod/own_camera.h"
 #include "mod/host_menus.h"
 #include "mod/dojo_art.h"
+#include "mod/ending_guard.h"
 #include "mod/movie_sync.h"
 #include "mod/net_pause.h"
 #include "mod/level_marks.h"
@@ -44,6 +45,7 @@
 #include "mod/map_turtles.h"
 #include "mod/revive.h"
 #include "mod/story_menu.h"
+#include "mod/team_progress.h"
 #include "mod/nametags.h"
 #include "mod/net_host.h"
 #include "mod/net_peer.h"
@@ -428,10 +430,12 @@ void init(const char* how) {
   four::install(cfg);  // (after the two above: it hooks the accessor they find)
   four_hud::install(cfg);
   revive::install(cfg);
+  team_progress::install(cfg);
   story_menu::install(cfg);
   host_menus::install(cfg);
   net_pause::install(cfg);
   movie_sync::install(cfg);
+  ending_guard::install(cfg);
   dojo_art::install();
   level_marks::install(cfg);
   costume::install(cfg);

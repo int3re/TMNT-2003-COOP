@@ -266,7 +266,7 @@ Only from the **github.com** site, with two requests:
 
 GitHub's programming interface (`api.github.com`) is not used: in some networks it is blocked
 although the site itself opens. About itself the launcher tells the server only its name and
-version (`tmntnet-launcher/0.15.1`); it sends nothing about the computer, the player or the
+version (`tmntnet-launcher/0.16.0`); it sends nothing about the computer, the player or the
 folders.
 
 The description of a release made together with the launcher ends with the «Данные для

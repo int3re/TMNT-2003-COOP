@@ -52,6 +52,13 @@ void read_slot0_as(int player, uint32_t without, uint32_t with);
 void* turtle(int player);
 void* player_data(int player);
 int character(int player);
+// Player p (0..3) plays the story now and has a character (players 3 and 4:
+// only when that many play).
+bool plays(int player);
+// While `character` is not 0 the game's "player 1's character" (0x404740(0))
+// is answered with it: the game's code that looks at player 1 alone runs once
+// more for another turtle of the team (team_progress.cpp). Game thread.
+void answer_first_as(int character);
 // Player p's place in the level as the game keeps it for its camera and the
 // enemies (3 floats; the feet), null while it has no turtle.
 const float* position(int player);

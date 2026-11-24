@@ -133,3 +133,29 @@ restore `0x49047E` = `83 3D ?? ?? ?? ?? 00 74 2B A1 ?? ?? ?? ?? 8B 48 28 FF B0 B
 | slot_rumble | `0x4a9ab6` | `8B 44 24 08 56 8B 74 24 08 69 F6 AC 00 00 00 81 C6 ?? ?? ?? ?? 89 86 A4 00 00 00 50` | hook: no rumble for slots 2 and 3 |
 | slot_rumble_for | `0x4a9af0` | `D9 44 24 0C 56 8B 74 24 08 D8 15 ?? ?? ?? ?? 69 F6 AC 00 00 00 DF E0 81 C6` | hook: no rumble for slots 2 and 3 |
 | turtle_volumes | `0x418618` | `55 8B EC 83 EC 14 56 8B 75 08 8B 46 60 8B 80 54 01 00 00 83 78 10 1D 89 45 08 74` | hook: a stunned turtle puts no volumes up (enemies leave it) |
+
+### The team's progress (tmntnet 0.16.0, verified unique; re/notes.md §37)
+
+| Name | Address | Pattern | Use |
+|---|---|---|---|
+| dojo_prize_1 | `0x4109bf` | `55 8B EC 83 EC 30 8D 45 D0 50 FF 75 08 E8 ?? ?? ?? ?? 83 4D D4 02 8D 45 D0` | hook: the first dojo's prize (record flag 2) for a character |
+| dojo_prize_2 | `0x4109e6` | `55 8B EC 83 EC 30 8D 45 D0 50 FF 75 08 E8 ?? ?? ?? ?? 83 4D D4 04 8D 45 D0` | hook: the second dojo's (flag 4) |
+| dojo_prize_3 | `0x410a0d` | `55 8B EC 83 EC 30 8D 45 D0 50 FF 75 08 E8 ?? ?? ?? ?? 83 4D D4 08 8D 45 D0` | hook: the third dojo's (flag 8) |
+| furthest_stage | `0x410bae` | `55 8B EC 83 EC 30 8D 45 D0 50 FF 75 08 E8 ?? ?? ?? ?? 8B 45 0C 39 45 F0` | hook: (character, stage): record +0x20, only up |
+| stage_opens | `0x40f939` | `53 56 57 33 F6 33 FF E8 ?? ?? ?? ?? 33 DB 43 83 F8 18` | hook: what the stage just played opens for player 1's character; returns the notices' bits |
+| solo_stage | `0x40498a` | `A1 ?? ?? ?? ?? 8B 80 3C 01 00 00 83 F8 06 74 0D 83 F8 13` | called: the stage is 6, 19 or 30 (the dojo) |
+| config_ptr | `0x410b6b` | `A1 ?? ?? ?? ?? 8B 80 54 11 00 00 C3` | +1 &holder (`0x60eae4`): the progress object, the turtles' records at its start (for the log) |
+| dojo_passed | `0x401198` | `33 C0 40 50 A3 ?? ?? ?? ?? E8 ?? ?? ?? ?? 6A 00 FF 35 ?? ?? ?? ?? E8 ?? ?? ?? ?? 83 C4 0C E8` | lab (`dojo_pass_at`): the dojo's judge's "passed" |
+
+### The ending ended before its own end (tmntnet 0.16.0, verified unique; re/notes.md §38)
+
+| Name | Address | Pattern | Use |
+|---|---|---|---|
+| ending_destroy | `0x49a88a` | `56 E8 ?? ?? ?? ?? 8B 74 24 08 83 7E 28 00 74 09 E8 ?? ?? ?? ?? 83 66 28 00 5E C3` | hook: the "destroy" of the turtles' ending scene (data: +0 state, +8 view, +0xC / +0x10 / +0x14 cutscenes, +0x18 staff roll, +0x1C stage, +0x20 last picture) |
+| ending_movie_destroy | `0x49a8a5` | `E8 ?? ?? ?? ?? 6A 01 E8 ?? ?? ?? ?? 59 C3` | hook: the "destroy" of the ending scene with a movie first (+8, +0x18, +0x20 only) |
+| staff_roll_stop | `0x49b3b9` | `83 25 ?? ?? ?? ?? 00 C7 05 ?? ?? ?? ?? 00 00 E0 43 E9 ?? ?? ?? ??` | called (task): the roll's lines draw no more (`[0x5e6e80]` = 0) and leave at 448 a frame, the roll's task is ended |
+| staff_roll_line_step | `0x49b5e9` | `55 8B EC 83 EC 10 53 8B 5D 08 D9 43 40 D8 1D ?? ?? ?? ?? DF E0 F6 C4 41 75 0C E8 ?? ?? ?? ?? 50 E8` | address only: the tasks with this step are the roll's lines |
+| cutscene_actor_step | `0x44f4e3` | `55 8B EC 83 EC 0C 56 E8 ?? ?? ?? ?? 8D 4D FC 51 8D 4D F8 51 50 89 45 F4 E8 ?? ?? ?? ?? 8B 75 08 83 C4 0C 85 C0 74 7C 53` | address only: the tasks with this step are cutscenes' actors (data +0x18 the cutscene's task) |
+| task_end | `0x4ac4b5` | `E8 ?? ?? ?? ?? 85 C0 74 11 6A 00 6A 00 FF 74 24 0C E8 ?? ?? ?? ?? 83 C4 0C C3 56 8B 74 24 08 E8 ?? ?? ?? ?? 5E C3` | called (task): ends a task, at once outside the tasks' passes, else by a message at the frame's end |
+| view_2d_free | `0x4acff8` | `56 8B 74 24 08 85 F6 74 32 57 6A 00 E8 ?? ?? ?? ?? 6A 00 6A 00 E8 ?? ?? ?? ?? 56 E8` | called (view): lets a 2D view made by `0x4acfc9` go |
+| task_list | `0x4aca5f` | `56 8B 35 ?? ?? ?? ?? EB 36 8B 06 83 78 10 03 74 2B` | +3 &head (`0x646d3c`), as lockstep.cpp: a node +0 task, +8 next; a task +0x1C its step |

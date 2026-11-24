@@ -150,6 +150,12 @@ struct Config {
   bool debug_frame_log = false;
   bool debug_rand_trace = false;
   bool debug_task_log = false;  // task_log=1: every task the game starts or ends, to tmntnet.log
+  bool debug_hidden = false;  // hidden=1: the game's window is never shown (not on the screen, not in the taskbar, never in front), no message boxes (lab: runs that leave the desktop alone)
+  int debug_draw_every = 1;   // draw_every=N: the game's draw calls reach the video card in one frame of N only (lab: runs that load the PC little; a screenshot waits for such a frame)
+  int debug_quit_after = 0;   // quit_after=N: the game closes itself N seconds after its start, as by its window's close button (lab)
+  bool debug_team_progress = true;  // team_progress=0: a stage's prizes go to player 1's turtle alone, as before 0.16.0 (lab: to compare)
+  bool debug_ending_guard = true;   // ending_guard=0: the ending's tasks stay when its scene is ended from outside, as before 0.16.0 (lab: the crash at closing the window during the ending)
+  int debug_dojo_pass_at = 0;      // dojo_pass_at=N: at frame N the dojo being played is passed, by the game's own routine (lab: its prize)
   int debug_stage_over_at = 0;     // stage_over_at=N: at frame N (the session's or the probe's) the stage is over, as if cleared (lab: the next level)
   bool debug_camera_keep = false;  // camera_keep=1: the players' own views are kept over a new scene (lab: the fault of 0.13.4)
   uint32_t debug_session_seed = 0;  // session_seed=N: the host's sessions start rand() with N (lab: a run again)

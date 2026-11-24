@@ -68,6 +68,11 @@ bool g_imgui = false;      // ImGui context + backends initialized
 bool g_dx9_ready = false;  // DX9 backend bound to g_device
 std::wstring g_shot_dir;
 bool g_shot_requested = false;
+// Lab ([debug] draw_every=N): the game's draw calls are dropped in all frames
+// but one of N, so a run costs the video card next to nothing; with hidden=1
+// those frames are not presented either (nobody sees them, and a Present
+// waits). The game's drawing code runs as ever: the game played is the same.
+bool g_lab_dropped = false;  // this frame's draw calls of the game are dropped
 uint32_t g_unblock_at = 0;  // keep blocking game input until this time
 
 // --- input --------------------------------------------------------------------
@@ -211,9 +216,13 @@ void debug_shots(IDirect3DDevice9* dev) {
       binds::apply_preset(two ? binds::Preset::TwoOnOneKeyboard : binds::Preset::Original);
       continue;
     }
+    if (g_lab_dropped) {  // (draw_every: nothing of the game is in this frame; the next drawn one)
+      done[i] = false;
+      continue;
+    }
     std::vector<uint8_t> px;
     unsigned w = 0, h = 0;
-    std::wstring path = g_shot_dir + L"\\debug_" +std::wstring(s.first.begin(), s.first.end()) + L"_" +
+    std::wstring path = g_shot_dir +L"\\debug_" +std::wstring(s.first.begin(), s.first.end()) + L"_" +
                         std::to_wstring(s.second) + L".png";
     CreateDirectoryW(g_shot_dir.c_str(), nullptr);
     if (!shot::capture(dev, px, w, h)) {
@@ -316,7 +325,7 @@ void render(IDirect3DDevice9* dev) {
 // with how far it is, eight times a second.
 bool g_covered = false;      // the game's draw calls are dropped
 bool g_own_drawing = false;  // ... but not tmntnet's own
-bool drop_draw(IDirect3DDevice9* dev) { return g_covered && !g_own_drawing && dev == g_device; }
+bool drop_draw(IDirect3DDevice9* dev) { return (g_covered || g_lab_dropped) && !g_own_drawing && dev == g_device; }
 
 using DrawPrimitive_t = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*, D3DPRIMITIVETYPE, UINT, UINT);
 using DrawIndexedPrimitive_t = HRESULT(STDMETHODCALLTYPE*)(IDirect3DDevice9*, D3DPRIMITIVETYPE, INT, UINT, UINT, UINT, UINT);
@@ -397,6 +406,12 @@ HRESULT STDMETHODCALLTYPE hkPresent(IDirect3DDevice9* dev, const RECT* src, cons
   render(dev);
   g_own_drawing = false;
   if (dev == g_device) dst = display::before_present(wnd ? wnd : g_hwnd, dst);
+  if (dev == g_device && g_cfg.debug_draw_every > 1) {
+    static uint32_t frame = 0;
+    const bool dropped = g_lab_dropped;
+    g_lab_dropped = ++frame % (uint32_t)g_cfg.debug_draw_every != 0;  // (the next frame's)
+    if (dropped && g_cfg.debug_hidden) return D3D_OK;
+  }
   HRESULT hr = oPresent(dev, src, dst, wnd, dirty);
   static unsigned failures = 0;
   if (FAILED(hr) && hr != D3DERR_DEVICELOST && (++failures == 1 || failures % 600 == 0))

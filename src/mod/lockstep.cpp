@@ -20,6 +20,7 @@
 #include "mod/net_host.h"
 #include "mod/net_peer.h"
 #include "mod/patch.h"
+#include "mod/team_progress.h"
 
 namespace lockstep {
 namespace {
@@ -965,6 +966,7 @@ void on_keyboard(uint8_t* keys) {
     for (const Config::FrameKey& k : g_cfg.debug_frame_keys)
       if (frame >= k.frame && frame < k.frame + k.frames) keys[k.dik] = 0x80;
   if (frame > 0 && frame == g_cfg.debug_stage_over_at) four::debug_stage_over();  // (lab: on to the next level)
+  if (frame > 0 && frame == g_cfg.debug_dojo_pass_at) team_progress::debug_dojo_pass();  // (lab: the dojo's prize)
   g_esc_down.store((keys[0x01] & 0x80) != 0, std::memory_order_relaxed);
   if (!g_cfg.debug_sync_menu || state != (int)State::Off) return;
   // The probe: the main menu's first frame is the common start.

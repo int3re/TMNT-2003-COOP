@@ -11,7 +11,7 @@
 namespace tmnp {
 
 constexpr uint32_t kMagic = 0x504E4D54;  // bytes 'T','M','N','P'
-constexpr uint16_t kVersion = 12;  // 1 = raw UDP (tmntnet 0.1), 2 = ENet, 3 = up to four PCs (0.10), 4 = back in a running game (0.11), 5 = ГОТОВ (0.11.13), 6 = costumes (0.12.0: a step more in the select), 7 = own cameras (0.13.0: "on the screen" by every player's view, one view for the game's reckoning), 8 = the story for as many as play (0.13.1: the story menu's cursor), 9 = the host's start as a word in its buttons (0.13.2: bit 9), 10 = nobody held near the game's camera (0.13.5: the turtles' circle), 11 = the pause (0.13.6: bit 8 of anybody's buttons stops every game), 12 = a movie's end (0.13.8: bit 10 of the buttons; everybody in the stages for one turtle)
+constexpr uint16_t kVersion = 13;  // 1 = raw UDP (tmntnet 0.1), 2 = ENet, 3 = up to four PCs (0.10), 4 = back in a running game (0.11), 5 = ГОТОВ (0.11.13), 6 = costumes (0.12.0: a step more in the select), 7 = own cameras (0.13.0: "on the screen" by every player's view, one view for the game's reckoning), 8 = the story for as many as play (0.13.1: the story menu's cursor), 9 = the host's start as a word in its buttons (0.13.2: bit 9), 10 = nobody held near the game's camera (0.13.5: the turtles' circle), 11 = the pause (0.13.6: bit 8 of anybody's buttons stops every game), 12 = a movie's end (0.13.8: bit 10 of the buttons; everybody in the stages for one turtle), 13 = the team's progress (0.16.0: the dojo's prizes, the story's progress and what a stage opens for every turtle that played it)
 constexpr uint16_t kDefaultPort = 7777;
 constexpr uint16_t kDiscoveryPort = 7778;  // raw UDP broadcast, not ENet
 constexpr int kInputHistory = 8;  // frames repeated in every input packet

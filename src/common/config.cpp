@@ -300,6 +300,12 @@ bool load_config(const std::wstring& path, Config& cfg) {
   cfg.debug_profile = ini.get_int("debug", "profile", 0) != 0;
   cfg.debug_session_seed = (uint32_t)std::max(0, ini.get_int("debug", "session_seed", 0));
   cfg.debug_stage_over_at = std::max(0, ini.get_int("debug", "stage_over_at", 0));
+  cfg.debug_dojo_pass_at = std::max(0, ini.get_int("debug", "dojo_pass_at", 0));
+  cfg.debug_team_progress = ini.get_int("debug", "team_progress", 1) != 0;
+  cfg.debug_ending_guard = ini.get_int("debug", "ending_guard", 1) != 0;
+  cfg.debug_hidden = ini.get_int("debug", "hidden", 0) != 0;
+  cfg.debug_draw_every = std::clamp(ini.get_int("debug", "draw_every", 1), 1, 600);
+  cfg.debug_quit_after = std::max(0, ini.get_int("debug", "quit_after", 0));
   cfg.debug_camera_keep = ini.get_int("debug", "camera_keep", 0) != 0;
   cfg.debug_stall_ms = std::clamp(ini.get_int("debug", "stall_ms", 0), 0, 60000);
   cfg.debug_actions = ini.get_int("debug", "actions", 0) != 0;

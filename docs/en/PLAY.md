@@ -121,6 +121,17 @@ with the players' names; the host chooses the level.
   played by the first player's turtle alone; in a shared game the whole team gets there, and the
   dojo's intro screen says «Для всей команды» (For the whole team) instead of «Только для
   Игрока 1» (For Player 1 only).
+- **Rewards and progress go to the whole team.** In the original everything a cleared level gives
+  goes to the first player's turtle alone: the dojo's prize (the jump attack after the first dojo,
+  more attack power after the second and the third), the "story cleared" mark, the levels opened.
+  In a shared game every turtle that played the level gets it, and the host's save keeps it for
+  each of them. The "unlocked…" notices after a level are shown for the whole team, one after
+  another.
+- **The last boss in one playthrough of four.** The game lets you to Oroku Saki only when the
+  story has been cleared by all four turtles: four playthroughs in the original. A team of four
+  gets to him right after the last level. A team of two or three has to clear the story once more
+  with the turtles that are left. «Гэмбу» (Genbu), the strongest attack, opens the same way: when
+  all four turtles have passed the third dojo.
 - **Movies end for everybody at the same time.** Players 1 and 2 can skip a movie ("select" or
   "start"); if it is watched to the end, the game waits until it has finished playing on every
   PC.

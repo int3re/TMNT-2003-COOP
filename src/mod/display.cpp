@@ -42,6 +42,9 @@ constexpr size_t kPlaceHwndPush = 0xC0;  // FF 35 <&g_hwnd> (push [hwnd]) inside
 LRESULT CALLBACK subclass_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 extern WNDPROC g_game_proc;
 
+ULONGLONG g_started = 0;    // install()'s time (lab: quit_after)
+bool g_quit_asked = false;
+
 using Place_t = void(__cdecl*)(int w, int h);
 Place_t oPlace = nullptr;
 HWND* g_game_hwnd = nullptr;
@@ -59,10 +62,28 @@ DWORD windowed_style() {
   return s;
 }
 
+// Lab ([debug] hidden=1): a window nobody sees. It is never shown (the game's
+// ShowWindow hides it), has no taskbar button, never comes in front, and lies
+// off the screen in case anything shows it after all.
+constexpr DWORD kHiddenEx = WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+constexpr int kHiddenAt = -32000;
+
 void apply(HWND hwnd) {
   if (!hwnd || g_mode == Mode::Fullscreen) return;
   DWORD visible = GetWindowLongA(hwnd, GWL_STYLE) & WS_VISIBLE;
   MONITORINFO mi = monitor_of(hwnd);
+  if (g_cfg.debug_hidden) {
+    int cw = g_cfg.window_w ? g_cfg.window_w : 640, ch = g_cfg.window_w ? g_cfg.window_h : 480;
+    DWORD style = windowed_style();
+    RECT r{0, 0, cw, ch};
+    AdjustWindowRectEx(&r, style, FALSE, 0);
+    SetWindowLongA(hwnd, GWL_STYLE, style);
+    SetWindowLongA(hwnd, GWL_EXSTYLE, kHiddenEx);
+    SetWindowPos(hwnd, HWND_BOTTOM, kHiddenAt, kHiddenAt, r.right - r.left, r.bottom - r.top,
+                 SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_HIDEWINDOW);
+    LOGI("display (lab): a hidden window, client %dx%d", cw, ch);
+    return;
+  }
   if (g_mode == Mode::Borderless) {
     const RECT& m = mi.rcMonitor;
     SetWindowLongA(hwnd, GWL_STYLE, WS_POPUP | visible);
@@ -147,6 +168,31 @@ BOOL WINAPI hkIsIconic(HWND hwnd) {
   return IsIconic(hwnd);
 }
 
+// Lab ([debug] hidden=1): the game's own window calls. Its window is made
+// without WS_VISIBLE, as a tool window off the screen; "show" hides; nothing
+// is brought in front; a message box goes to the log (it would wait for a
+// click nobody can give).
+HWND WINAPI hkCreateWindowExA(DWORD ex, LPCSTR cls, LPCSTR name, DWORD style, int x, int y, int w, int h, HWND parent,
+                              HMENU menu, HINSTANCE inst, LPVOID param) {
+  if (!parent) {
+    LOGI("display (lab): the game's window '%s' is made hidden", name ? name : "");
+    const HWND made = CreateWindowExA(ex | kHiddenEx, cls, name, style & ~WS_VISIBLE, kHiddenAt, kHiddenAt, w, h, parent,
+                                      menu, inst, param);
+    // The game waits for messages until its window is told it is active; a
+    // window never shown never is. One such message of ours starts it.
+    if (made) PostMessageA(made, WM_ACTIVATE, WA_ACTIVE, 0);
+    return made;
+  }
+  return CreateWindowExA(ex, cls, name, style, x, y, w, h, parent, menu, inst, param);
+}
+BOOL WINAPI hkShowWindow(HWND hwnd, int) { return ShowWindow(hwnd, SW_HIDE); }
+BOOL WINAPI hkSetForegroundWindow(HWND) { return TRUE; }
+BOOL WINAPI hkUpdateWindow(HWND) { return TRUE; }
+int WINAPI hkMessageBoxA(HWND, LPCSTR text, LPCSTR caption, UINT) {
+  LOGW("display (lab): the game's message box '%s': %s", caption ? caption : "", text ? text : "");
+  return IDOK;
+}
+
 // Points tmnt.exe's import of user32!name at `hook`.
 bool patch_import(const char* name, void* hook) {
   auto base = reinterpret_cast<uint8_t*>(GetModuleHandleW(nullptr));
@@ -221,6 +267,15 @@ void install(const Config& cfg) {
   g_cfg = cfg;
   g_mode = cfg.display == "borderless" ? Mode::Borderless : cfg.display == "windowed" ? Mode::Windowed
                                                                                        : Mode::Fullscreen;
+  g_started = GetTickCount64();
+  if (cfg.debug_hidden) {
+    g_mode = Mode::Windowed;  // (never the full screen: that would take the desktop)
+    g_cfg.background_run = true;
+    int ok = patch_import("CreateWindowExA", (void*)&hkCreateWindowExA) + patch_import("ShowWindow", (void*)&hkShowWindow) +
+             patch_import("SetForegroundWindow", (void*)&hkSetForegroundWindow) +
+             patch_import("UpdateWindow", (void*)&hkUpdateWindow) + patch_import("MessageBoxA", (void*)&hkMessageBoxA);
+    LOGI("display (lab): hidden=1: the game's window is never shown, nothing comes in front (%d of 5 calls redirected)", ok);
+  }
   if (cfg.fps_limit) timeBeginPeriod(1);
   LOGI("display: %s%s%s%s", mode_name(g_mode), cfg.vsync < 0 ? "" : cfg.vsync ? ", vsync on" : ", vsync off",
        cfg.fps_limit ? (", fps limit " + std::to_string(cfg.fps_limit)).c_str() : "",
@@ -283,6 +338,12 @@ void on_device(HWND hwnd, UINT w, UINT h) {
 }
 
 const RECT* before_present(HWND hwnd, const RECT* game_dst) {
+  if (g_cfg.debug_quit_after && !g_quit_asked && hwnd &&
+      GetTickCount64() - g_started >= (ULONGLONG)g_cfg.debug_quit_after * 1000) {
+    g_quit_asked = true;
+    LOGI("display (lab): quit_after=%d: closing the game", g_cfg.debug_quit_after);
+    PostMessageA(hwnd, WM_CLOSE, 0, 0);
+  }
   if (g_cfg.fps_limit) limit_fps();
   if (g_mode == Mode::Fullscreen || game_dst || !g_copy || !hwnd || !g_bb_w || !g_bb_h) return game_dst;
   RECT c{};

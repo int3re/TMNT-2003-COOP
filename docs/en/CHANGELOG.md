@@ -7,9 +7,90 @@ working journal — what broke in the real game, how it was found and how it was
 details with addresses are in [re/notes.md](../../re/notes.md).
 
 > **Network compatibility.** All players must have a version with the same protocol number
-> (the mod itself refuses with a clear message if the protocols differ). Right now it is protocol 12:
-> versions 0.13.8, 0.13.9, 0.14.0, 0.15.0 and 0.15.1. (Protocol 11: versions 0.13.6 and 0.13.7.)
+> (the mod itself refuses with a clear message if the protocols differ). Right now it is protocol 13:
+> version 0.16.0. (Protocol 12: versions 0.13.8, 0.13.9, 0.14.0, 0.15.0 and 0.15.1.)
 
+- **0.16.0:** a player's review of the mod (2026-11-23): "everybody needs the jump attack: Nano,
+  Stockman and many bosses are hard to get past without it" and "I would add Oroku Saki: a group
+  is hardly going to play the whole game four times". A look into the game's code showed that
+  since 0.13.8 everybody took part in the dojo, yet its prize still went to the host's turtle
+  alone. Protocol 13: everybody needs 0.16.0, it does not connect to 0.15.1 and older.
+  - **The game's way.** The game keeps its progress by character (six records in the save: flags
+    and "how far the story is played") and writes all of it for the first player's character. The
+    dojo remembers player 1's character at its start and, when passed, calls one of three routines
+    for it (`0x4109bf`, `0x4109e6`, `0x410a0d`): flag 2 is the jump attack, flags 4 and 8 give +5
+    attack power each; when all four turtles have flag 8, «Гэмбу» (Genbu) opens. A level's results
+    (`0x494a24`) write the stage played (`0x410bae`) for player 1's character too, and the second
+    player's results go into that same record. "What does this stage open" (`0x40f939`) is asked
+    once, for player 1: after stage 37 it is the "story cleared" mark and a costume. Before stage
+    38 the game looks whether all four turtles have cleared the story (`0x4943e4`): if so, the
+    stage with Oroku Saki, if not, the ending movie.
+  - **The dojo's prize goes to the whole team.** The mod calls the same routine of the game for
+    every turtle that took part in the dojo (`team_progress.cpp`). At one PC the dojo is still
+    played by the first player alone, and its prize goes to that player's turtle.
+  - **Progress and unlocks go to the whole team.** The stage played is written for every turtle
+    that played it. "What does this stage open" is asked once more for each of them: meanwhile the
+    game hears that turtle's character in place of the first player's, so the mark, the costume
+    and the notices are set by the game's own code. The notices add up and are shown one after
+    another.
+  - **Oroku Saki in one playthrough.** After stage 37 a team of four is marked as a whole, and the
+    game itself takes it on to stage 38. A team of two or three has to clear the story once more
+    with the turtles that are left: the game's rule "all four" is as it was.
+  - **Test runs without windows and with little load** (the player during the runs: "do the runs
+    without a window" and "lower the load from the games"). `[debug]` keys: `hidden=1` — the
+    game's window is not shown at all (not on the screen, not in the taskbar, never in front, the
+    game's message boxes go to the log); `quit_after` — the game closes itself; `draw_every=N` —
+    one frame of N reaches the video card while the game's drawing code runs as ever. Measured on
+    a run of three copies: not one visible window, the focus and the cursor untouched; the three
+    games together took about half of one core (3.3 % of the processor) and 0.5 % of the video
+    card.
+  - **Checked in the lab** (test copies, the Steam mock). The dojo with three, passed by the
+    game's own routine: the prize's flag on the team's three turtles and not on the fourth, the
+    host's save written with them; 9264 frames identical on three PCs. The last stage with three:
+    all three marked, three costume notices instead of one, then the ending movie. The same with
+    the fourth turtle marked beforehand: the stage with Oroku Saki began in that same run (a shot
+    of its intro), 8083 frames identical. The last stage with four from scratch: all four marked,
+    four notices, stage 38 began; 12 265 frames identical on four PCs. In the hidden mode: a
+    session, the dojo's prize, 7782 frames identical, the games closed by themselves. The
+    integration test and the Steam mock pass.
+  - **Closing the window during the ending no longer crashes the game.** Found while checking
+    0.16.0; the game crashed with the new rule switched off as well, and outside a network game
+    too, so the cause is old and lies in the game itself. The ending is a scene that starts tasks
+    of its own: cutscenes of the engine (a cutscene has "actors" of its own: models, the camera,
+    a fade), a stage with the turtles behind them, the staff roll (and the roll has one more task
+    for every line on the screen) and the last picture. It ends them from its own states as the
+    ending goes on, and its "destroy" (`0x49a88a`) leaves them alone. A closed window ends the
+    scene from outside, and the tasks live on. During the staff roll: a few frames into the way
+    out the game destroys its font (`0x4a7163`) while a line of the roll still draws with it
+    (`0x49b681` → `0x4a7224`) — the crash at `0x513E98`. During the cutscenes, and whenever
+    drawing was skipped in those frames, the game crashed a little later, as RenderWare closed
+    (`0x4C0F08`): the models made by the ending's tasks were still there.
+    The mod (`ending_guard.cpp`), in the "destroy" of an ending scene, ends whatever the scene
+    still has, the way the game itself does as the ending goes on: it stops the roll with the
+    game's own routine (`0x49b3b9`) and ends its lines, ends a cutscene and then its actors, the
+    stage behind, the view and the last picture. All of it is done at once, while the game's font
+    and the scene's fade task are still there. A first form left a cutscene's actors to live out
+    their frame, as the game does, and the fade actor then crashed with no fade task left
+    (`0x4ACF7F`) — a run that closed the window during a cutscene showed it. When the ending is
+    played to its end there is nothing left to end, and the mod does nothing. The `[debug]` key
+    `ending_guard=0` brings the old behaviour back.
+    The lab (three hidden copies, a game of three, the last stage). The window closed during the
+    staff roll, 99 seconds after the stage's end: before the fix all three games crashed (exit
+    code C0000005), with it all three closed with code 0 — the host in the middle of the session,
+    the guests a little later, each by itself by then; each log says: ended the roll, 10 of its
+    lines, a cutscene, the stage behind and the view. A control run on one build: two copies with
+    the fix closed with code 0, the third, with `ending_guard=0`, crashed at `0x513E98` as before.
+    The window closed during the first cutscene, 19 seconds after the stage's end: without the
+    fix a crash as RenderWare closed, with it all three closed with code 0 (ended the cutscene,
+    its 17 actors and the stage behind). The integration test and the Steam mock pass with this
+    fix too.
+  - **Not checked:** play at one PC (two to four without a network); the dojo and the last stage
+    really played through rather than ended by a lab key; the prizes of the second and the third
+    dojo (the same code as the first's). Closing the window during the ending is checked in the
+    lab only and at two of its moments (the first cutscene and the staff roll): the window's real
+    close button, the other moments (the stage behind loading, the second and the third cutscene,
+    the last picture), Splinter's and Casey's ending and the second ending (the one with a movie)
+    go through the same code but were not run.
 - **0.15.1:** the game's settings in the launcher re-checked (the player: "what does synchronization
   mean?", then "yes, rename it to «Верт. синхронизация»" (Vertical sync) and "also re-check whether
   all the settings work correctly"). The mod itself did not change: protocol 12.

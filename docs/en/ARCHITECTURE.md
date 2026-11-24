@@ -167,6 +167,12 @@ adds its own:
   (`csel.cpp`), all four stand on the level map (`map_turtles.cpp`).
 - Team rules (`revive.cpp`): a fallen turtle is stunned, not killed; it is raised by holding a
   button.
+- Team progress (`team_progress.cpp`): the game keeps its progress by character and writes it for
+  the first player's character alone — the dojo's prize (`0x4109bf`, `0x4109e6`, `0x410a0d`), the
+  stage played (`0x410bae`) and everything a stage opens (`0x40f939`: the "story cleared" mark,
+  the costume, the notices). The mod repeats the game's own calls for every turtle that played the
+  stage; for the third of them the game hears that turtle's character in place of the first
+  player's meanwhile.
 - The game keeps the players near the shared camera with an "invisible circle"; in a session the
   circle is removed.
 
@@ -239,11 +245,13 @@ src/mod/      tmntnet.asi
   display          window modes, focus, WM_PAINT, minimized window
   csel / csel_art / costume        turtle and costume select
   revive           stunned turtles and raising them
+  team_progress    the dojo's prizes, the story's progress and what a stage opens, for every turtle of the team
   net_pause        pause in a network game
   native_menu / main_menu / option_pages / net_pages / game_text   menus in the style of the game
   four_hud / nametags / map_turtles   panels, names, level map
   dinput_hook / binds / keyconf    input, key table, mouse
   audio / voice_sync               movie volume, voices by frame
+  ending_guard     an ending ended before its own end (the window closed) takes its tasks with it
   autosave / load_guard / quality / ambient / overlay   the rest
 src/client/   tmntnet-client.exe (SDL2, ImGui)
 src/setup/    tmntnet-setup.exe

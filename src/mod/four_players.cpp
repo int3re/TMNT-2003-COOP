@@ -127,10 +127,17 @@ struct RecPtr {
     return (void*)&rec32(p, Off);
   }
 };
+// While set: the game hears this character for player 1 (team_progress.cpp
+// runs the game's "what does this stage open" once for every turtle of the
+// team; the game asks it for player 1 alone).
+int g_first_as = 0;
 template <size_t Off>
 struct ChGet {
   static inline int(__cdecl* orig)(int) = nullptr;
-  static int __cdecl hook(int p) { return extra(p) ? ch32(p, Off) : orig(p); }
+  static int __cdecl hook(int p) {
+    if (Off == 0xC8 && p == 0 && g_first_as) return g_first_as;
+    return extra(p) ? ch32(p, Off) : orig(p);
+  }
 };
 template <size_t Off>
 struct ChSet {
@@ -1394,6 +1401,14 @@ int character(int player) {
   if (!g_info || !*g_info || player < 0 || player > 3) return 0;
   return char_of(player);
 }
+
+bool plays(int player) {
+  if (!g_info || !*g_info || player < 0 || player > 3) return false;
+  if (player == 1 ? players() < 2 : player > 1 && !(g_on && player < g_count)) return false;
+  return char_of(player) != 0;
+}
+
+void answer_first_as(int character) { g_first_as = character; }
 
 void camera_solo(int player) { g_solo = player; }
 

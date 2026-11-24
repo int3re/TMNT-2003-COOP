@@ -1783,3 +1783,232 @@ pacing followed), and one stand-still of 5 s: the watchdog found the game's thre
 USER32 and GameOverlayRenderer.dll, called from the main loop (`0x4b25b1` in `0x4b2525`): a window
 message that took that long. Whose PC was waited for could not be read from the line; now it says
 the frames played and the time waited by player.
+
+## 37. The team's progress: the dojo's prize, the story cleared, the last boss (tmntnet 0.16.0, protocol v13)
+
+A player's review (2026-11-23): "everybody needs the jump attack", "I would add Oroku Saki: a group
+will hardly play the game four times". Static reading of TMNT.EXE (bc49a82c...), then the lab.
+
+**The characters' records.** The progress object `[0x60eae4]` (0x1158 bytes; the save image is its
+first 0x10E8): the turtles' records at +(c - 1) * 0x30 for characters 1..4, Splinter (0x33) at
++0xC0, Casey (0x39) at +0xF0; `0x410425(c, out)` copies one out, `0x41046d(c, in)` back. Record +4
+flags: 1 the story cleared (set `0x410a34`, asked `0x410a5b` / `0x410a77`), 2 / 4 / 8 the three
+dojos' prizes (set `0x4109bf` / `0x4109e6` / `0x410a0d`, asked `0x410929` / `0x410948` /
+`0x410968`; `0x410988`: all four turtles have 8), 0x10 the second costume (`0x410cab` reads the
+flags, `0x410cc4` writes them). Record +0x20 the furthest stage (`0x410bae(c, stage)`, only up).
+The save file has them at 8 + (c - 1) * 0x30 (version byte 3 at +0, the sum at +0x1160).
+
+**What the prizes do.** A turtle's abilities are made from its own character's record (`0x401c64`
+on): flag 2 sets ability +0x54 ("ОТКРЫТА АТАКА С ПРЫЖКА": the jump attack; also given inside the
+first dojo itself), flag 4 adds 5 to +0x50 (`[c * 12 + 0x5df6e0]`: "СИЛА АТАКИ ... ВОЗРОСЛА"), flag
+8 adds 5 more (`0x4018b1`) and, when `0x410988()`, sets +0x58 ("ГЕМБУ ... ОТКРЫТА").
+
+**The dojo.** Its init (`0x49104c`) keeps the dojo's number at [d] (0..2 from `0x4049b9()` = [info
++0x1C]), `0x404740(0)` (player 1's character) at [d +8], whether that character has the prize
+already at [d +0x14]. Its judge (four variants, `0x4015f4` the first dojo's: no enemies left
+(`0x404a9e`) and player 1 in play) jumps to `0x401198` "passed" ([0x60a40c] = 1, a message, [info
++0x138] = 1) or `0x4011c0` "failed". The result step (`0x49119d`): [d +4] = 1 if `0x40125c()`
+([0x60a40c]) else 2; with 1, `push [d +8]` and the prize's setter by [d]. Then `0x40f939` (below)
+and `0x410bae(0x404740(0), stage)`. The lab's `stage_over_at` (flag 0x800) ends the dojo as
+failed: no prize; `dojo_pass_at` calls `0x401198`.
+
+**A level's results** (the story's stage step `0x494b79`, states 7..10; the stage number is still
+the one played): the bonus (§36), `0x40f939()` -> [flow +0xC] and state 8 if not 0 (the notices'
+task `0x49d107(flags)`: `0x49cb6e` makes a list of up to 23 notices, one per bit), then
+`0x494a24`: `0x41084d(stage, 0x404740(0), score, combo)` for player 1 and, if player 2 has a
+character, again with player 2's numbers and **player 1's character**, `0x41089a(stage,
+character(0), time)`, `0x410bae(character(0), stage)`.
+
+**What a stage opens** (`0x40f939`, esi = 0 throughout: player 1): a switch on the stage with the
+character of player 1 in its cases. Stage 0x25 (37): if the character's story is not cleared yet:
+`0x410a34`, `0x410c38(0x80)`, flags |= 0x10, and the notice bit by character (1 -> 4, 2 -> 8, 3 ->
+2, 4 -> 1: "... ПОЛУЧИЛ НОВЫЙ КОСТЮМ"). Stage 0x1E (the third dojo, passed): by character
+(unlimited shurikens and the like). Stages 2, 11, 15, 21, 22, 24, 25, 26: a character that has
+cleared the story, without a continue (`0x404a15()` = [info +0x120]): a notice bit each. Its tail
+looks at all four turtles (everything collected: `0x410c38(2)`; all cleared and unlocks 0x3FE:
+`0x410c38(1)`).
+
+**The last boss.** After stage 0x25 the flow asks `0x4943e4()`: the next stage 0x26 (38) is played
+only if `0x410a5b` says cleared for characters 1, 4, 3 and 2; else the story ends there (the
+ending movie, the game's save screen: `0x494428` counts 0x26 as a chapter's end unless all four
+are cleared). Stage 0x26 is Oroku Saki's (`0x494c07`: `0x40425e()` before it).
+
+**tmntnet (team_progress.cpp).** The team = the players of the story with a character
+(`four::plays`), but player 1; none in a stage for one turtle (`0x40498a`) outside a game together
+(there the dojo is player 1's alone, §36). Hooks: the three prize setters and `0x410bae`: after
+the game's call for player 1's character, the same call for each of the team's; `0x40f939`: after
+the game's own run, once more for each of the team's with `four::answer_first_as(character)`
+(the hooked `0x404740(0)` answers that character), the results or-ed. All PCs of a game together
+do the same to the same records (the host's, §18), hence protocol 13.
+
+**Lab** (runs\, three or four test copies over the mock Steam): dojoprize3 (three PCs, stage 6,
+`dojo_pass_at=5000`): flags 0x2 on characters 2, 4 and 3 (the team), 0 on 1; stage 6 on the three;
+the host's savegame.dat has them; 9264 frames the same. lastA (three PCs, stage 37,
+`stage_over_at=6000`): notices 0x8 -> 0xB, flags 0x13 and stage 37 on the three, then the ending.
+lastB (the same with character 1's flag 1 put into the host's test save before): the mod's
+autosave instead of the game's save screen, the level map, stage 38 with the three made; the
+shot is Oroku Saki's intro; 8083 frames the same. last4 (four PCs, nobody cleared): notices 0x4
+-> 0xF, flags 0x11 / 0x13 on all four, stage 38 with the four made; 12 265 frames the same on four.
+lastOld (`team_progress=0`): as 0.15.1.
+
+**Found here, fixed in §38.** Closing the game's window during the ending (lastA, lastOld: with and
+without the new hooks) crashes: C0000005 at `0x513E98` (eax = edx = 0) under `0x4a7237` <-
+`0x49b715` <- the tasks' draw site `0x4ac938` <- the tasks' draw `0x4ac47e`; the copies closed
+after it at `0x4c0f08`. Closing during Oroku Saki's intro (lastB, last4) is clean.
+
+**Lab runs nobody sees** (the user, during these runs: no windows, less load). display.cpp,
+`[debug] hidden=1`: the exe's imports of CreateWindowExA (no WS_VISIBLE, WS_EX_TOOLWINDOW |
+WS_EX_NOACTIVATE, at -32000), ShowWindow (SW_HIDE), SetForegroundWindow, UpdateWindow (nothing)
+and MessageBoxA (to the log) are ours; a windowed mode is forced; one WM_ACTIVATE(WA_ACTIVE) is
+posted to the new window: the game waits for messages until its window is told it is active, and
+a window never shown never is (the first hidden run stood still at frame 0). `quit_after=N`:
+WM_CLOSE to the window N seconds after the start (Process.CloseMainWindow finds no window).
+overlay.cpp, `draw_every=N`: the game's draw calls are dropped (as while coming into a game,
+§35) in all frames but one of N, and with hidden=1 those frames are not presented; a screenshot
+waits for a drawn frame. Without it a hidden window's Present was slow (20..30 a second for a
+game loop of 55: the game skipped draws, the host's timed menu keys missed, no session). The
+runners also set `fps_limit=60` (nothing else paces a game that does not present), anti-aliasing
+and anisotropy off, and BelowNormal priority. hidden3 (three PCs, the dojo): a session, the prize,
+7782 frames the same, exits 0; sampled twice a second beside it: no visible window of the games,
+none in front, the cursor not moved; 53 % of one core for the three (3.3 % of 16 cores), 0.5 % of
+the video card's 3D engine.
+
+## 38. The window closed during the ending: the staff roll without its font (tmntnet 0.16.0)
+
+§37's "found, not fixed": closing the game's window while the story's ending plays crashed the
+game, with and without 0.16.0's hooks, in a session and after it. Static reading of TMNT.EXE
+(bc49a82c...), then the lab. What §37 calls the ending movie is no Sofdec movie: cutscenes of the
+engine and the staff roll.
+
+**The way out.** The main loop (`0x4b2525`): PeekMessage; WM_QUIT (0x12) goes to `0x4b25f5`:
+`0x4ab3f9(0)`, then `while (0x4ab20f()) { 0x4ac4db(); 0x4a6fde(); 0x4af6b1(); }` — the tasks'
+frames go on (without `0x4af0f0` and `0x4b0e52` of the normal loop; no wait of a session was seen
+in them) until the flow is gone ([0x638c64] = 0); then the settings (`0x4b3607`) and the teardown
+(`0x4103c0`, `0x4acba0`, ..., `0x4b0613`: RenderWare).
+
+**The flow** (a task, [0x638c64], data 0xD0 bytes: make `0x4ab457`, step `0x4ab4a3`): a stack of
+levels of 12 bytes {+0 table, +4 index (word), +8 the scene's task}, +0xC0 the depth, +0xC4 the
+command waiting, +0xC8 what was done last, +0xCC its argument. A table's entry (0x20 bytes): {+0
+id, +4 flags, +8 priority, +0xC data size, +0x10 make, +0x14 destroy, +0x18 step, +0x1C draw};
+0xFFFF8000 ends a table; `0x4ab262` makes the entry's task. A command (`0x4ab111`, in esi) is kept
+and the current scene's task ended; with no scene task the flow's step takes it: 0xFFFF8001 the
+entry before (`0x4ab2dc`), 0xFFFF8002 the next (`0x4ab2ee(arg)`), 0xFFFF8003 back to the level
+above (`0x4ab3e9`), 0xFFFF8004 down to level N (`0x4ab3f9(N)`; `0x4ab21b` ends the tasks of the
+levels above N), another value: the entry with that id. `0x4ab5bd(table, arg)` / `0x4ab300` /
+`0x4ab36d` push a table. Past the end of the table at level 0 the flow ends itself.
+
+The root table `0x5df2c8`: {0: make `0x401000`, the game's start — among it the font:
+`0x4a732c`, [0x625970] = the font read (`0x513e60`), [0x62596c] a brush; step `0x401026`}, {2:
+make `0x401064` pushes `0x5e0370`, the game itself: its entry 4 (`0x4944a0`) is the story}, {1:
+make `0x402b0e`, **destroy `0x401038`**, step `0x40105b` = "next" at once}. So on the way out the
+scenes' tasks are ended from the top down, the root goes on to its last entry, and that entry's
+destroy lets the game's parts go — `0x4a7163` among them: the font destroyed, [0x625970] = 0.
+Then the table's end. Some four frames in all, and every task still alive steps and draws in them.
+
+**Tasks.** `0x4ac135(desc, 0, arg)` returns the task (its handle too); desc = {kind, flags,
+priority, data size, make, destroy, step, draw}. A task: +4 kind, +8 flags (1 no step, 2 no draw),
++0xC priority, +0x10 state (3 = held), +0x14 make, +0x18 destroy, +0x1C step, +0x20 draw, +0x24
+where its owner keeps it (cleared at its end), +0x34 its data (malloc: not cleared). All are in
+the list [0x646d3c] (a node: +0 task, +8 next). `0x4ac4b5(task)` ends one: inside a pass
+([0x646d2c] != 0) by a message for the frame's end (`0x4ac229`), else at once (`0x4ac1d1`:
+destroy(data), out of the lists, freed). No task owns another: a scene ends what it made itself.
+The teardown ends no task (`0x4acba0` only lets two RenderWare objects go).
+
+**The ending.** The story's flow pushes one of two tables of one scene (`0x4948a1` ->
+`0x49a86c`: table `0x5e6e34`; `0x4948b0` -> `0x49a87b`: `0x5e6e54`):
+- the turtles': make `0x49ac3e`, destroy `0x49a88a`, step `0x49ad5d` (23 states, table
+  `0x49b118`);
+- the one with a movie first: make `0x49abab`, destroy `0x49a8a5`, step `0x49b174` (its state 1
+  pushes `0x5e6e14`, the movie scene of §36).
+
+The scene's data (0x2C bytes): +0 state, +4 player 1's character, +8 a 2D view (`0x4acfc9`; let go
+by `0x4acff8`), +0xC / +0x10 / +0x14 three cutscenes (`0x44b540(n)` -> `0x44f08c`: a task of 0x98
+bytes; ready `0x44b553`, start `0x44b558`, playing `0x44b55d`), +0x18 the staff roll
+(`0x49b855`), +0x1C the stage behind (make `0x49a8b3`: stage 0x33 with the players; destroy
+`0x49a957` frees the players, the world and the rest), +0x20 the last picture (`0x49abf2`), +0x24
+a count, +0x28 (`0x427f06` / `0x427f1a`). The second scene has +8, +0x18 and +0x20 only. The
+turtles' make clears +0xC..+0x1C; +8, +0x20 (and the second scene's +0x18) hold what the memory
+had until their state. The states (the same numbers in both scenes): 0 the stage is ready; 2..6
+cutscene 1 (made, started, played, ended), 7..0xB cutscene 2; 0xC cutscene 3 made, the view and
+the roll made; 0xD the fade in; 0xE the roll watched (`0x49b3b3()`: its last line stands, then
+0x78 frames; or `0x49b3a6(roll)` == 2); 0xF after the fade out `0x49b3b9(roll)` and
+`0x4acff8(view)`; 0x11, 0x10, 0x12, 0x13 cutscene 3 started, played, ended; 0x14 a view and the
+last picture made; 0x15 it stands (180 frames, then a button); 0x16 after the fade out the stage
+ended, the view let go, the picture ended, `0x4ab3e9`. Splinter (0x33) and Casey (0x39) have no
+stage and no cutscenes: their scene starts at 0xD. **The scenes' destroys end none of this**
+(`0x49a88a`: `0x4acf46()`, and `0x427f1a()` if +0x28; `0x49a8a5`: `0x4acf46()`, `0x490473(1)`).
+
+**A cutscene** (`0x44f08c(def)`: priority 5, make `0x44ee1a`, destroy `0x44ef3e`, step `0x44f033`).
+Its data: +0 state (0 its file loads, 1 ready, 2 and 3 started and playing, 4 ending), +4 its
+file, +6 its textures, +8 the number of its actors, +0xC a texture dictionary, +0x14 its script,
++0x18 up to 32 actors. Starting it (`0x44ef75`) runs the script, which makes the actors
+(`0x44f5a3`, 29 callers: models, the camera, a fade, ...): tasks of kind 4, make `0x44f3d7`,
+destroy `0x44f445`, step `0x44f4e3`, draw `0x44f460`; an actor's data: +0x10 state, +0x14 flags,
++0x18 the cutscene's task, +0x1C..+0x2C its sort's make, destroy, step, draw and message
+routines, +0x30 its own data. The cutscene's destroy only sends every actor message 10
+(`0x44ee5c` -> `0x4abf14`). An actor reads it in its next step: `0x44eefa(cutscene, itself)` —
+which writes into the cutscene's data, freed by then — and ends itself, so its destroy runs at
+that frame's end. The fade actor's destroy (`0x44ecb8`) calls `0x4acf72(0.0)`, which takes
+[0x646da4], the fade task: made by `0x4acef5` in the ending scene's make, ended (and the pointer
+cleared) by `0x4acf46` in its destroy. `0x411ee2` / `0x411f2c` (a cutscene's start and end: the
+level's own things held and let go) do nothing in stage 0x33.
+
+**The staff roll.** A task of 0x4C bytes, priority 7: make `0x49b3cf` ([0x5e6e80] = 1 "the lines
+draw", the speed [0x5e6e7c] = 1.0), destroy `0x49b465` (`0x4a7224(0.0)` — the font once more —,
+its picture, the texture dictionary [0x61cdc0], file 0x2F3), step `0x49b78e`, draw `0x49b4a9`. Its
+step makes a task for every line when its time comes (`0x49b740(def)`; `0x49b388(i)`: the defs,
+0x30 bytes each, i = 1..0xB6 from `0x596de8`; +0 kind: 1 a picture, else text): 0x48 bytes,
+priority 8, make `0x49b4f8` (++[0x61cdb8]), destroy `0x49b5cd`, step `0x49b5e9` (+0x40, its place,
++= the speed; past 448 it ends itself), draw `0x49b681`: nothing with [0x5e6e80] == 0; a picture
+by `0x4abab2`; text: the colour (`0x4a71d0`), **`0x4a7224(z)` = `0x513e90([0x625970], z)`: `fstp
+[font + 0xC]`**, the string (`0x4a72cb`). `0x49b3b9(roll)`: [0x5e6e80] = 0, the speed 448.0, the
+roll's task ended; the lines then leave by themselves within three frames.
+
+**The two crashes are one fault.** WM_QUIT while the roll is up: the scene's task is ended at once
+and its destroy leaves the roll, its lines, the cutscene made and the stage. The lines step and
+draw on through the way out; `0x401038` destroys the font; the next draw of a line of text writes
+to [0 + 0xC]: C0000005 at `0x513E98` (eax = 0), from `0x4a7237` <- `0x49b715` <- the tasks' draw
+site `0x4ac938` <- `0x4ac47e` <- `0x4ac502` <- `0x4b2603`, the way out's loop. With the draw pass
+skipped in those frames (`0x4af87e`, "the PC is slow" — the lab's copies that had waited ten
+seconds for the closed host and were not in a session any more) the game reaches the teardown and
+falls in RenderWare: the world module's close (`0x4fda60`) walks the clumps still alive
+(`0x4fdb00` by `0x4c1070`: those the ending's tasks had made), destroys each atomic's geometry
+(`0x501040`), and a geometry plugin's destructor (`0x4f2340`..) frees into its free list
+[0x6a3938], which is 0 by then: C0000005 at `0x4C0F08` (the free list's free, edi = the list = 0).
+While a cutscene plays (state 5) no line draws; the game falls at RenderWare's close all the same
+(`0x4C0F08` from `0x4ef3a6` <- `0x4bd185` <- `0x4fdc52`, the module's other walk). Closing in a
+level or in Oroku Saki's intro leaves nothing behind (§37's runs).
+
+**tmntnet (ending_guard.cpp).** Hooks on the two destroys (`0x49a88a`, `0x49a8a5`). Before the
+game's own code, what the scene still has is ended the way its own states end it: the roll by
+`0x49b3b9` and its lines at once (the tasks whose step is `0x49b5e9`); each cutscene and then its
+actors (the tasks whose step is `0x44f4e3` and whose +0x18 is that cutscene, in the task list's
+order); the stage; the view by `0x4acff8`; the last picture. The fields are cleared. Which fields
+are looked at goes by the state (+0x18 and +8 in 0xD..0xF, +0x20 and +8 in 0x15 and 0x16), and
+every handle is looked up in the task list before it is ended. All of it happens inside the
+scene's destroy: the scene's fade task is still there (the game's own code ends it next), and the
+font (the root's last entry comes frames later). A first form that left the actors to end
+themselves fell a frame into the way out: the fade actor's destroy with no fade task, C0000005 at
+`0x4ACF7F` (eax = 0) from `0x44ecc3` <- `0x44f45c` <- `0x4ac1eb` <- the messages (`0x4ac275`). At
+the scene's own end nothing is left and nothing is done. `[debug] ending_guard=0`: as before.
+
+**Lab** (runs\, three hidden test copies over the mock Steam, stage 37 over at frame 6000,
+`quit_after=250`: each window is closed some 99 s after the stage's end, the roll up, state 0xE):
+endclose-before (0.16.0 as it was built before): the three exit with C0000005, each at `0x513E98`
+30 ms after "closing the game" — A in the session, B and C ten seconds later, by themselves; 11 772
+frames the same. endclose-fixed: "the scene is ended in state 0xE ...: the staff roll, the stage
+behind it, their view, 10 lines of the roll, 1 cutscene" on each, then the way out as in a level;
+the three exit with 0 (A in the session, B 2 s and C 5.5 s after its end, by themselves); 11 869
+frames the same. endclose-control (the same build, C with `ending_guard=0`): A and B exit with 0,
+C with C0000005 at `0x513E98`; 11 768 frames the same. By a task log (`task_log=1`) the ending's
+scene and the stage behind are made 7.2 s after the stage's end, cutscene 1 and its 17 actors at
+7.7 s; the windows above were closed 92 s into the scene. endclose-early (`quit_after=170`: 19 s
+after the stage's end, cutscene 1 playing, state 5; the guard's first form on A and B, none on C):
+A and B C0000005 at `0x4ACF7F`, C at `0x4C0F08`; 7187 frames the same. endclose-early-fixed: "state
+0x5 ...: the stage behind it, cutscenes: 1, their actors: 17" on each; the three exit with 0; 7077
+frames the same. endclose-final (the build as it is, `quit_after=250` again): state 0xE, the staff
+roll, the stage behind, their view, 9 or 10 lines, cutscene 3 with no actors yet; the three exit
+with 0; 11 879 frames the same. The integration test and the Steam mock pass. Beside the runs
+(watch_windows.ps1, 100 s): no visible window, none in front, the cursor not moved; 7 % of one
+core for the three during the ending. Not run: the other states (the stage loading, cutscenes 2
+and 3, the last picture), Splinter's and Casey's ending, the ending with a movie.

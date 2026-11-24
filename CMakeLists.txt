@@ -152,6 +152,7 @@ add_library(tmntnet MODULE
   src/mod/four_players.cpp
   src/mod/four_hud.cpp
   src/mod/revive.cpp
+  src/mod/team_progress.cpp
   src/mod/csel_art.cpp
   src/mod/voice_sync.cpp
   src/mod/quality.cpp
@@ -159,6 +160,7 @@ add_library(tmntnet MODULE
   src/mod/host_menus.cpp
   src/mod/net_pause.cpp
   src/mod/movie_sync.cpp
+  src/mod/ending_guard.cpp
   src/mod/dojo_art.cpp
   src/mod/level_marks.cpp
   src/mod/costume.cpp

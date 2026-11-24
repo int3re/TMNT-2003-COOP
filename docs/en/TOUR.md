@@ -22,6 +22,7 @@ game. The pages of the «Сетевая игра» (Network game) section are ad
 | A fallen player | loses a life heart, then drops out | lies stunned, a teammate revives them |
 | Pause over the network | — | Esc by any player, for everyone at once |
 | Dojo levels | played by one turtle of the first player | the whole team takes part |
+| Rewards and progress | go to the first player's turtle alone | go to every turtle of the team; the last boss opens in one playthrough of four |
 | Costumes | unlocked by playing through, by a secret button and by the calendar | all six are unlocked, picked on the select screen |
 | Screen | 4:3 only | wide screen (more is visible at the sides), borderless, anti-aliasing up to 8x |
 | Menus | designed for 4:3 | the main menu, the options and the level select span the full width of the screen, without bars |
